@@ -1,6 +1,5 @@
 /*
- * driver_helper.c - Interception Driver Manager
- * Compiled into driver_install.exe AND driver_uninstall.exe (identical binary, copied twice).
+ * driver_helper.c - Interception Driver Manager (compiled to driver_manager.exe)
  * Self-elevates via UAC if needed, then shows an interactive menu.
  * Uses interception_create_context() as the ground-truth driver status check.
  */
