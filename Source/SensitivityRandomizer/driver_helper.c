@@ -1,7 +1,8 @@
 /*
- * driver_helper.c
+ * driver_helper.c - Interception Driver Manager
  * Compiled into driver_install.exe AND driver_uninstall.exe (identical binary, copied twice).
- * Reads its own filename to decide which action to take, then self-elevates via UAC if needed.
+ * Self-elevates via UAC if needed, then shows an interactive menu.
+ * Uses interception_create_context() as the ground-truth driver status check.
  */
 #define WIN32_LEAN_AND_MEAN
 #ifndef _UNICODE
@@ -14,6 +15,8 @@
 #include <shellapi.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <conio.h>
+#include "Libraries/interception.h"
 
 static BOOL IsElevated(void)
 {
@@ -29,41 +32,22 @@ static BOOL IsElevated(void)
     return result;
 }
 
-int main(void)
+static BOOL IsDriverInstalled(void)
 {
-    wchar_t self[MAX_PATH];
-    GetModuleFileNameW(NULL, self, MAX_PATH);
-
-    /* Check own filename for "uninstall" */
-    BOOL uninstall = (wcsstr(self, L"uninstall") != NULL ||
-                      wcsstr(self, L"Uninstall") != NULL);
-
-    /* Re-launch elevated via UAC if not already admin */
-    if (!IsElevated()) {
-        SHELLEXECUTEINFOW sei = { sizeof(sei) };
-        sei.lpVerb = L"runas";
-        sei.lpFile = self;
-        sei.nShow  = SW_NORMAL;
-        if (!ShellExecuteExW(&sei)) {
-            printf("Elevation request failed (error %lu).\n", GetLastError());
-            system("pause");
-        }
-        return 0;
+    InterceptionContext ctx = interception_create_context();
+    if (ctx) {
+        interception_destroy_context(ctx);
+        return TRUE;
     }
+    return FALSE;
+}
 
-    /* Build path to install-interception.exe sitting next to this exe */
-    wchar_t dir[MAX_PATH];
-    wcsncpy_s(dir, _countof(dir), self, _TRUNCATE);
-    wchar_t *slash = wcsrchr(dir, L'\\');
-    if (slash) *(slash + 1) = L'\0';
-
+static int RunTool(const wchar_t *dir, BOOL uninstall)
+{
     wchar_t cmd[MAX_PATH + 64];
     _snwprintf_s(cmd, _countof(cmd), _TRUNCATE,
                  L"\"%sinstall-interception.exe\" %s",
                  dir, uninstall ? L"/uninstall" : L"/install");
-
-    printf("%s\n\n", uninstall ? "Uninstalling Interception driver..."
-                               : "Installing Interception driver...");
 
     STARTUPINFOW si = { sizeof(si) };
     PROCESS_INFORMATION pi;
@@ -77,8 +61,89 @@ int main(void)
         printf("Error: could not launch install-interception.exe (error %lu)\n",
                GetLastError());
     }
-
-    printf("\n");
-    system("pause");
     return (int)exitCode;
+}
+
+static void WaitKey(void)
+{
+    printf("\nPress any key to continue...");
+    _getch();
+}
+
+int main(void)
+{
+    wchar_t self[MAX_PATH];
+    GetModuleFileNameW(NULL, self, MAX_PATH);
+
+    if (!IsElevated()) {
+        SHELLEXECUTEINFOW sei = { sizeof(sei) };
+        sei.lpVerb = L"runas";
+        sei.lpFile = self;
+        sei.nShow  = SW_NORMAL;
+        if (!ShellExecuteExW(&sei)) {
+            printf("Elevation failed (error %lu).\n", GetLastError());
+            WaitKey();
+        }
+        return 0;
+    }
+
+    wchar_t dir[MAX_PATH];
+    wcsncpy_s(dir, _countof(dir), self, _TRUNCATE);
+    wchar_t *slash = wcsrchr(dir, L'\\');
+    if (slash) *(slash + 1) = L'\0';
+
+    for (;;) {
+        system("cls");
+
+        BOOL installed = IsDriverInstalled();
+
+        printf("============================================\n");
+        printf("  Interception Driver Manager\n");
+        printf("============================================\n\n");
+        printf("  Status: %s\n\n",
+               installed ? "[INSTALLED]" : "[NOT INSTALLED]");
+        printf("  1. Install driver\n");
+        printf("  2. Uninstall driver\n");
+        printf("  3. Recheck status\n");
+        printf("  4. Exit\n");
+        printf("\nChoice: ");
+
+        int ch = _getch();
+        printf("%c\n\n", ch);
+
+        if (ch == '1') {
+            if (installed) {
+                printf("Driver is already installed.\n");
+            } else {
+                printf("Installing Interception driver...\n\n");
+                RunTool(dir, FALSE);
+                printf("\n");
+                if (IsDriverInstalled())
+                    printf("Driver installed successfully.\n");
+                else
+                    printf("Installation failed. Check that Secure Boot is disabled\n"
+                           "and that you accepted the UAC prompt.\n");
+            }
+            WaitKey();
+        } else if (ch == '2') {
+            if (!installed) {
+                printf("Driver is not currently installed.\n");
+            } else {
+                printf("Uninstalling Interception driver...\n\n");
+                RunTool(dir, TRUE);
+                printf("\n");
+                if (!IsDriverInstalled())
+                    printf("Driver uninstalled successfully.\n");
+                else
+                    printf("Uninstallation may have failed.\n");
+            }
+            WaitKey();
+        } else if (ch == '3') {
+            /* just loop to recheck */
+        } else if (ch == '4' || ch == 'q' || ch == 'Q' || ch == 27 /* ESC */) {
+            break;
+        }
+    }
+
+    return 0;
 }

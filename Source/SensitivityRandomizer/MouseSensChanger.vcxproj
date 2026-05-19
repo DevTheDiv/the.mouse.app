@@ -108,7 +108,7 @@ xcopy /Y /D "$(SolutionDir)..\..\Application\settings.ini" "$(OutDir)"
 xcopy /Y /D "$(SolutionDir)..\..\Application\visualize.py" "$(OutDir)"
 xcopy /Y /D "$(SolutionDir)Libraries\x86\interception.dll" "$(OutDir)"
 call "$(VCToolsInstallDir)..\..\..\Auxiliary\Build\vcvarsall.bat" x86 &gt;nul
-cl.exe /nologo /O2 /W3 /D_UNICODE /DUNICODE /TC /Fo"$(IntDir)driver_helper.obj" "$(ProjectDir)driver_helper.c" /Fe"$(OutDir)driver_install.exe" /link /SUBSYSTEM:CONSOLE user32.lib shell32.lib advapi32.lib
+cl.exe /nologo /O2 /W3 /D_UNICODE /DUNICODE /TC /Fo"$(IntDir)driver_helper.obj" "$(ProjectDir)driver_helper.c" /Fe"$(OutDir)driver_install.exe" /link /SUBSYSTEM:CONSOLE /LIBPATH:"$(ProjectDir)Libraries\x86" interception.lib user32.lib shell32.lib advapi32.lib
 copy /Y "$(OutDir)driver_install.exe" "$(OutDir)driver_uninstall.exe" &gt;nul</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
@@ -135,7 +135,7 @@ xcopy /Y /D "$(SolutionDir)..\..\Application\settings.ini" "$(OutDir)"
 xcopy /Y /D "$(SolutionDir)..\..\Application\visualize.py" "$(OutDir)"
 xcopy /Y /D "$(SolutionDir)Libraries\x64\interception.dll" "$(OutDir)"
 call "$(VCToolsInstallDir)..\..\..\Auxiliary\Build\vcvarsall.bat" x64 &gt;nul
-cl.exe /nologo /O2 /W3 /D_UNICODE /DUNICODE /TC /Fo"$(IntDir)driver_helper.obj" "$(ProjectDir)driver_helper.c" /Fe"$(OutDir)driver_install.exe" /link /SUBSYSTEM:CONSOLE user32.lib shell32.lib advapi32.lib
+cl.exe /nologo /O2 /W3 /D_UNICODE /DUNICODE /TC /Fo"$(IntDir)driver_helper.obj" "$(ProjectDir)driver_helper.c" /Fe"$(OutDir)driver_install.exe" /link /SUBSYSTEM:CONSOLE /LIBPATH:"$(ProjectDir)Libraries\x64" interception.lib user32.lib shell32.lib advapi32.lib
 copy /Y "$(OutDir)driver_install.exe" "$(OutDir)driver_uninstall.exe" &gt;nul</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
@@ -166,7 +166,7 @@ xcopy /Y /D "$(SolutionDir)..\..\Application\settings.ini" "$(OutDir)"
 xcopy /Y /D "$(SolutionDir)..\..\Application\visualize.py" "$(OutDir)"
 xcopy /Y /D "$(SolutionDir)Libraries\x86\interception.dll" "$(OutDir)"
 call "$(VCToolsInstallDir)..\..\..\Auxiliary\Build\vcvarsall.bat" x86 &gt;nul
-cl.exe /nologo /O2 /W3 /D_UNICODE /DUNICODE /TC /Fo"$(IntDir)driver_helper.obj" "$(ProjectDir)driver_helper.c" /Fe"$(OutDir)driver_install.exe" /link /SUBSYSTEM:CONSOLE user32.lib shell32.lib advapi32.lib
+cl.exe /nologo /O2 /W3 /D_UNICODE /DUNICODE /TC /Fo"$(IntDir)driver_helper.obj" "$(ProjectDir)driver_helper.c" /Fe"$(OutDir)driver_install.exe" /link /SUBSYSTEM:CONSOLE /LIBPATH:"$(ProjectDir)Libraries\x86" interception.lib user32.lib shell32.lib advapi32.lib
 copy /Y "$(OutDir)driver_install.exe" "$(OutDir)driver_uninstall.exe" &gt;nul</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
@@ -197,7 +197,7 @@ xcopy /Y /D "$(SolutionDir)..\..\Application\settings.ini" "$(OutDir)"
 xcopy /Y /D "$(SolutionDir)..\..\Application\visualize.py" "$(OutDir)"
 xcopy /Y /D "$(SolutionDir)Libraries\x64\interception.dll" "$(OutDir)"
 call "$(VCToolsInstallDir)..\..\..\Auxiliary\Build\vcvarsall.bat" x64 &gt;nul
-cl.exe /nologo /O2 /W3 /D_UNICODE /DUNICODE /TC /Fo"$(IntDir)driver_helper.obj" "$(ProjectDir)driver_helper.c" /Fe"$(OutDir)driver_install.exe" /link /SUBSYSTEM:CONSOLE user32.lib shell32.lib advapi32.lib
+cl.exe /nologo /O2 /W3 /D_UNICODE /DUNICODE /TC /Fo"$(IntDir)driver_helper.obj" "$(ProjectDir)driver_helper.c" /Fe"$(OutDir)driver_install.exe" /link /SUBSYSTEM:CONSOLE /LIBPATH:"$(ProjectDir)Libraries\x64" interception.lib user32.lib shell32.lib advapi32.lib
 copy /Y "$(OutDir)driver_install.exe" "$(OutDir)driver_uninstall.exe" &gt;nul</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
