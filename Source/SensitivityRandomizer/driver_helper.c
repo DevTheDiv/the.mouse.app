@@ -1,7 +1,15 @@
 /*
  * driver_helper.c - Interception Driver Manager (compiled to driver_manager.exe)
  * Self-elevates via UAC if needed, then shows an interactive menu.
- * Uses interception_create_context() as the ground-truth driver status check.
+ *
+ * Status is determined by two independent checks:
+ *   - interception_create_context(): is the driver running right now?
+ *   - keyboard.sys / mouse.sys in system32\drivers: are the files present?
+ *
+ * Interception uses class filter drivers (loaded per-device by the PnP manager,
+ * not just by the SCM), so they cannot be cleanly unloaded from a running system.
+ * Uninstall removes registry entries via install-interception.exe, then schedules
+ * the locked .sys files for deletion on the next reboot via MoveFileExW.
  */
 #define WIN32_LEAN_AND_MEAN
 #ifndef _UNICODE
@@ -17,6 +25,8 @@
 #include <conio.h>
 #include "Libraries/interception.h"
 
+/* ── elevation ─────────────────────────────────────────────────────────── */
+
 static BOOL IsElevated(void)
 {
     BOOL result = FALSE;
@@ -31,42 +41,42 @@ static BOOL IsElevated(void)
     return result;
 }
 
-static BOOL IsDriverInstalled(void)
+/* ── driver status ──────────────────────────────────────────────────────── */
+
+typedef enum { DRV_INSTALLED, DRV_NOT_INSTALLED, DRV_REBOOT_REQUIRED } DrvStatus;
+
+static BOOL SysFileExists(const wchar_t *filename)
 {
+    wchar_t path[MAX_PATH];
+    GetWindowsDirectoryW(path, MAX_PATH);
+    wcscat_s(path, _countof(path), L"\\System32\\drivers\\");
+    wcscat_s(path, _countof(path), filename);
+    return (GetFileAttributesW(path) != INVALID_FILE_ATTRIBUTES);
+}
+
+static DrvStatus GetDriverStatus(void)
+{
+    BOOL filesPresent = SysFileExists(L"keyboard.sys") || SysFileExists(L"mouse.sys");
+
     InterceptionContext ctx = interception_create_context();
-    if (ctx) {
-        interception_destroy_context(ctx);
-        return TRUE;
-    }
-    return FALSE;
+    BOOL running = (ctx != NULL);
+    if (ctx) interception_destroy_context(ctx);
+
+    if (!running && !filesPresent) return DRV_NOT_INSTALLED;
+    if  (running && !filesPresent) return DRV_REBOOT_REQUIRED; /* files gone, reboot to finish */
+    return DRV_INSTALLED;
 }
 
-static void StopInterceptionServices(void)
+static const char *StatusLabel(DrvStatus s)
 {
-    SC_HANDLE scm = OpenSCManagerW(NULL, NULL, SC_MANAGER_ALL_ACCESS);
-    if (!scm) return;
-
-    /* The Interception keyboard and mouse filter drivers register as services
-     * named after their .sys files. Stop them so the files aren't locked
-     * when install-interception.exe tries to delete them. */
-    const wchar_t *names[] = { L"keyboard", L"mouse" };
-    for (int i = 0; i < 2; i++) {
-        SC_HANDLE svc = OpenServiceW(scm, names[i],
-                                     SERVICE_STOP | SERVICE_QUERY_STATUS);
-        if (svc) {
-            SERVICE_STATUS st;
-            ControlService(svc, SERVICE_CONTROL_STOP, &st);
-            /* Wait up to 3 s for the service to stop */
-            for (int t = 0; t < 30; t++) {
-                if (!QueryServiceStatus(svc, &st)) break;
-                if (st.dwCurrentState == SERVICE_STOPPED) break;
-                Sleep(100);
-            }
-            CloseServiceHandle(svc);
-        }
+    switch (s) {
+        case DRV_NOT_INSTALLED:   return "[NOT INSTALLED]";
+        case DRV_REBOOT_REQUIRED: return "[REBOOT REQUIRED TO COMPLETE UNINSTALL]";
+        default:                  return "[INSTALLED]";
     }
-    CloseServiceHandle(scm);
 }
+
+/* ── helpers ────────────────────────────────────────────────────────────── */
 
 static int RunTool(const wchar_t *dir, BOOL uninstall)
 {
@@ -90,11 +100,35 @@ static int RunTool(const wchar_t *dir, BOOL uninstall)
     return (int)exitCode;
 }
 
+/* Schedule a system32\drivers\<filename> for deletion on next reboot.
+ * Returns TRUE if the file is already gone or successfully scheduled. */
+static BOOL ScheduleSysForDeletion(const wchar_t *filename)
+{
+    wchar_t path[MAX_PATH];
+    GetWindowsDirectoryW(path, MAX_PATH);
+    wcscat_s(path, _countof(path), L"\\System32\\drivers\\");
+    wcscat_s(path, _countof(path), filename);
+
+    if (GetFileAttributesW(path) == INVALID_FILE_ATTRIBUTES) return TRUE; /* already gone */
+    if (DeleteFileW(path)) return TRUE;                                    /* deleted now  */
+
+    /* File is locked by the running driver — queue it for next-boot deletion */
+    if (MoveFileExW(path, NULL, MOVEFILE_DELAY_UNTIL_REBOOT)) {
+        printf("  %ls: scheduled for deletion on next reboot.\n", filename);
+        return TRUE;
+    }
+    printf("  %ls: could not schedule for deletion (error %lu).\n",
+           filename, GetLastError());
+    return FALSE;
+}
+
 static void WaitKey(void)
 {
     printf("\nPress any key to continue...");
     _getch();
 }
+
+/* ── main ───────────────────────────────────────────────────────────────── */
 
 int main(void)
 {
@@ -121,13 +155,12 @@ int main(void)
     for (;;) {
         system("cls");
 
-        BOOL installed = IsDriverInstalled();
+        DrvStatus status = GetDriverStatus();
 
         printf("============================================\n");
         printf("  Interception Driver Manager\n");
         printf("============================================\n\n");
-        printf("  Status: %s\n\n",
-               installed ? "[INSTALLED]" : "[NOT INSTALLED]");
+        printf("  Status: %s\n\n", StatusLabel(status));
         printf("  1. Install driver\n");
         printf("  2. Uninstall driver\n");
         printf("  3. Recheck status\n");
@@ -138,35 +171,53 @@ int main(void)
         printf("%c\n\n", ch);
 
         if (ch == '1') {
-            if (installed) {
+            if (status == DRV_INSTALLED) {
                 printf("Driver is already installed.\n");
+            } else if (status == DRV_REBOOT_REQUIRED) {
+                printf("An uninstall is pending. Please reboot first,\n"
+                       "then reinstall if needed.\n");
             } else {
                 printf("Installing Interception driver...\n\n");
                 RunTool(dir, FALSE);
                 printf("\n");
-                if (IsDriverInstalled())
+                if (GetDriverStatus() == DRV_INSTALLED)
                     printf("Driver installed successfully.\n");
                 else
                     printf("Installation failed. Check that Secure Boot is disabled\n"
                            "and that you accepted the UAC prompt.\n");
             }
             WaitKey();
+
         } else if (ch == '2') {
-            if (!installed) {
+            if (status == DRV_NOT_INSTALLED) {
                 printf("Driver is not currently installed.\n");
+                WaitKey();
+            } else if (status == DRV_REBOOT_REQUIRED) {
+                printf("Uninstall is already pending — please reboot to complete.\n");
+                WaitKey();
             } else {
-                printf("Stopping Interception services...\n");
-                StopInterceptionServices();
-                printf("Uninstalling Interception driver...\n\n");
+                /* Run install-interception.exe to remove registry entries
+                 * (UpperFilters, service keys). It may fail to delete the .sys
+                 * files while the class filter is still bound to running devices,
+                 * so we schedule those ourselves with MoveFileExW. */
+                printf("Removing driver registry entries...\n\n");
                 RunTool(dir, TRUE);
+
+                printf("\nScheduling driver files for removal on next reboot...\n");
+                ScheduleSysForDeletion(L"keyboard.sys");
+                ScheduleSysForDeletion(L"mouse.sys");
+
                 printf("\n");
-                if (!IsDriverInstalled())
+                DrvStatus after = GetDriverStatus();
+                if (after == DRV_NOT_INSTALLED) {
                     printf("Driver uninstalled successfully.\n");
-                else
-                    printf("Uninstallation failed. A reboot may be required\n"
-                           "to release the driver files before they can be removed.\n");
+                } else {
+                    printf("Driver uninstall queued.\n"
+                           "Please reboot — the driver will be fully removed on startup.\n");
+                }
+                WaitKey();
             }
-            WaitKey();
+
         } else if (ch == '3') {
             /* just loop to recheck */
         } else if (ch == '4' || ch == 'q' || ch == 'Q' || ch == 27 /* ESC */) {
