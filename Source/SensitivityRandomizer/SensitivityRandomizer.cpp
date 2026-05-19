@@ -388,8 +388,8 @@ int main()
     auto   prog_start = Clock::now();
     double carryX = 0, carryY = 0;
     double sens_mult = SENS_MEAN;
-    bool   paused    = false;
-    DWORD  lastpress = 0;
+    bool      paused    = false;
+    ULONGLONG lastpress = 0;
     bool   running   = true;
 
     // Smooth mode tracking
