@@ -103,10 +103,13 @@
       <AdditionalDependencies>interception.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
-      <Command>xcopy /Y /D "$(SolutionDir)..\..\Driver\*" "$(OutDir)"
+      <Command>xcopy /Y /D "$(SolutionDir)..\..\Driver\install-interception.exe" "$(OutDir)"
 xcopy /Y /D "$(SolutionDir)..\..\Application\settings.ini" "$(OutDir)"
 xcopy /Y /D "$(SolutionDir)..\..\Application\visualize.py" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)Libraries\x86\interception.dll" "$(OutDir)"</Command>
+xcopy /Y /D "$(SolutionDir)Libraries\x86\interception.dll" "$(OutDir)"
+call "$(VCToolsInstallDir)..\..\..\Auxiliary\Build\vcvarsall.bat" x86 &gt;nul
+cl.exe /nologo /O2 /W3 /D_UNICODE /DUNICODE /TC /Fo"$(IntDir)driver_helper.obj" "$(ProjectDir)driver_helper.c" /Fe"$(OutDir)driver_install.exe" /link /SUBSYSTEM:CONSOLE user32.lib shell32.lib advapi32.lib
+copy /Y "$(OutDir)driver_install.exe" "$(OutDir)driver_uninstall.exe" &gt;nul</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -127,10 +130,13 @@ xcopy /Y /D "$(SolutionDir)Libraries\x86\interception.dll" "$(OutDir)"</Command>
       <AdditionalDependencies>interception.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
-      <Command>xcopy /Y /D "$(SolutionDir)..\..\Driver\*" "$(OutDir)"
+      <Command>xcopy /Y /D "$(SolutionDir)..\..\Driver\install-interception.exe" "$(OutDir)"
 xcopy /Y /D "$(SolutionDir)..\..\Application\settings.ini" "$(OutDir)"
 xcopy /Y /D "$(SolutionDir)..\..\Application\visualize.py" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)Libraries\x64\interception.dll" "$(OutDir)"</Command>
+xcopy /Y /D "$(SolutionDir)Libraries\x64\interception.dll" "$(OutDir)"
+call "$(VCToolsInstallDir)..\..\..\Auxiliary\Build\vcvarsall.bat" x64 &gt;nul
+cl.exe /nologo /O2 /W3 /D_UNICODE /DUNICODE /TC /Fo"$(IntDir)driver_helper.obj" "$(ProjectDir)driver_helper.c" /Fe"$(OutDir)driver_install.exe" /link /SUBSYSTEM:CONSOLE user32.lib shell32.lib advapi32.lib
+copy /Y "$(OutDir)driver_install.exe" "$(OutDir)driver_uninstall.exe" &gt;nul</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -155,10 +161,13 @@ xcopy /Y /D "$(SolutionDir)Libraries\x64\interception.dll" "$(OutDir)"</Command>
       <AdditionalDependencies>interception.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
-      <Command>xcopy /Y /D "$(SolutionDir)..\..\Driver\*" "$(OutDir)"
+      <Command>xcopy /Y /D "$(SolutionDir)..\..\Driver\install-interception.exe" "$(OutDir)"
 xcopy /Y /D "$(SolutionDir)..\..\Application\settings.ini" "$(OutDir)"
 xcopy /Y /D "$(SolutionDir)..\..\Application\visualize.py" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)Libraries\x86\interception.dll" "$(OutDir)"</Command>
+xcopy /Y /D "$(SolutionDir)Libraries\x86\interception.dll" "$(OutDir)"
+call "$(VCToolsInstallDir)..\..\..\Auxiliary\Build\vcvarsall.bat" x86 &gt;nul
+cl.exe /nologo /O2 /W3 /D_UNICODE /DUNICODE /TC /Fo"$(IntDir)driver_helper.obj" "$(ProjectDir)driver_helper.c" /Fe"$(OutDir)driver_install.exe" /link /SUBSYSTEM:CONSOLE user32.lib shell32.lib advapi32.lib
+copy /Y "$(OutDir)driver_install.exe" "$(OutDir)driver_uninstall.exe" &gt;nul</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -183,10 +192,13 @@ xcopy /Y /D "$(SolutionDir)Libraries\x86\interception.dll" "$(OutDir)"</Command>
       <AdditionalDependencies>interception.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
-      <Command>xcopy /Y /D "$(SolutionDir)..\..\Driver\*" "$(OutDir)"
+      <Command>xcopy /Y /D "$(SolutionDir)..\..\Driver\install-interception.exe" "$(OutDir)"
 xcopy /Y /D "$(SolutionDir)..\..\Application\settings.ini" "$(OutDir)"
 xcopy /Y /D "$(SolutionDir)..\..\Application\visualize.py" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)Libraries\x64\interception.dll" "$(OutDir)"</Command>
+xcopy /Y /D "$(SolutionDir)Libraries\x64\interception.dll" "$(OutDir)"
+call "$(VCToolsInstallDir)..\..\..\Auxiliary\Build\vcvarsall.bat" x64 &gt;nul
+cl.exe /nologo /O2 /W3 /D_UNICODE /DUNICODE /TC /Fo"$(IntDir)driver_helper.obj" "$(ProjectDir)driver_helper.c" /Fe"$(OutDir)driver_install.exe" /link /SUBSYSTEM:CONSOLE user32.lib shell32.lib advapi32.lib
+copy /Y "$(OutDir)driver_install.exe" "$(OutDir)driver_uninstall.exe" &gt;nul</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -198,6 +210,7 @@ xcopy /Y /D "$(SolutionDir)Libraries\x64\interception.dll" "$(OutDir)"</Command>
     <ClInclude Include="utils.h" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="driver_helper.c" />
     <None Include="Libraries\include\armadillo" />
     <None Include="Libraries\x64\interception.dll" />
     <None Include="Libraries\x86\interception.dll" />
