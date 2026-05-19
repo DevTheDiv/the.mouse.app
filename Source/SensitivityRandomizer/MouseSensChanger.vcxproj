@@ -104,7 +104,9 @@
     </Link>
     <PostBuildEvent>
       <Command>xcopy /Y /D "$(SolutionDir)..\..\Driver\*" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)..\..\Application\settings.ini" "$(OutDir)"</Command>
+xcopy /Y /D "$(SolutionDir)..\..\Application\settings.ini" "$(OutDir)"
+xcopy /Y /D "$(SolutionDir)..\..\Application\visualize.py" "$(OutDir)"
+xcopy /Y /D "$(SolutionDir)Libraries\x86\interception.dll" "$(OutDir)"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -126,7 +128,9 @@ xcopy /Y /D "$(SolutionDir)..\..\Application\settings.ini" "$(OutDir)"</Command>
     </Link>
     <PostBuildEvent>
       <Command>xcopy /Y /D "$(SolutionDir)..\..\Driver\*" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)..\..\Application\settings.ini" "$(OutDir)"</Command>
+xcopy /Y /D "$(SolutionDir)..\..\Application\settings.ini" "$(OutDir)"
+xcopy /Y /D "$(SolutionDir)..\..\Application\visualize.py" "$(OutDir)"
+xcopy /Y /D "$(SolutionDir)Libraries\x64\interception.dll" "$(OutDir)"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -152,7 +156,9 @@ xcopy /Y /D "$(SolutionDir)..\..\Application\settings.ini" "$(OutDir)"</Command>
     </Link>
     <PostBuildEvent>
       <Command>xcopy /Y /D "$(SolutionDir)..\..\Driver\*" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)..\..\Application\settings.ini" "$(OutDir)"</Command>
+xcopy /Y /D "$(SolutionDir)..\..\Application\settings.ini" "$(OutDir)"
+xcopy /Y /D "$(SolutionDir)..\..\Application\visualize.py" "$(OutDir)"
+xcopy /Y /D "$(SolutionDir)Libraries\x86\interception.dll" "$(OutDir)"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -178,7 +184,9 @@ xcopy /Y /D "$(SolutionDir)..\..\Application\settings.ini" "$(OutDir)"</Command>
     </Link>
     <PostBuildEvent>
       <Command>xcopy /Y /D "$(SolutionDir)..\..\Driver\*" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)..\..\Application\settings.ini" "$(OutDir)"</Command>
+xcopy /Y /D "$(SolutionDir)..\..\Application\settings.ini" "$(OutDir)"
+xcopy /Y /D "$(SolutionDir)..\..\Application\visualize.py" "$(OutDir)"
+xcopy /Y /D "$(SolutionDir)Libraries\x64\interception.dll" "$(OutDir)"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
