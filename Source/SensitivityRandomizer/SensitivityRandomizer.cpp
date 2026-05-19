@@ -467,11 +467,12 @@ int main()
                                           || t_in > cur_chunk.t.back()
                                           || t_in >= CHUNK_SEC;
                             if (exhausted) {
-                                chunk_abs_start += CHUNK_SEC;
+                                // Non-blocking check: don't stall the mouse loop waiting for the
+                                // generator. If the next chunk isn't ready yet, keep the last
+                                // sens_mult and retry on the next mouse event.
                                 unique_lock<mutex> lk(g_mtx);
-                                g_cv.wait_for(lk, chrono::milliseconds(200),
-                                              [] { return !g_buf.empty() || g_gen_done.load(); });
                                 if (!g_buf.empty()) {
+                                    chunk_abs_start += CHUNK_SEC;
                                     cur_chunk = move(g_buf.front());
                                     g_buf.pop_front();
                                     lk.unlock();
@@ -479,8 +480,11 @@ int main()
                                     chunk_i = 0;
                                 } else {
                                     lk.unlock();
-                                    have_chunk = false;
-                                    if (!INFINITE_MODE) running = false;
+                                    if (g_gen_done && !INFINITE_MODE) {
+                                        have_chunk = false;
+                                        running = false;
+                                    }
+                                    // else: generator still running, keep current sens_mult
                                 }
                             }
                         } else {
