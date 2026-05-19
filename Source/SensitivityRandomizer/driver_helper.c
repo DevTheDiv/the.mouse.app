@@ -41,6 +41,33 @@ static BOOL IsDriverInstalled(void)
     return FALSE;
 }
 
+static void StopInterceptionServices(void)
+{
+    SC_HANDLE scm = OpenSCManagerW(NULL, NULL, SC_MANAGER_ALL_ACCESS);
+    if (!scm) return;
+
+    /* The Interception keyboard and mouse filter drivers register as services
+     * named after their .sys files. Stop them so the files aren't locked
+     * when install-interception.exe tries to delete them. */
+    const wchar_t *names[] = { L"keyboard", L"mouse" };
+    for (int i = 0; i < 2; i++) {
+        SC_HANDLE svc = OpenServiceW(scm, names[i],
+                                     SERVICE_STOP | SERVICE_QUERY_STATUS);
+        if (svc) {
+            SERVICE_STATUS st;
+            ControlService(svc, SERVICE_CONTROL_STOP, &st);
+            /* Wait up to 3 s for the service to stop */
+            for (int t = 0; t < 30; t++) {
+                if (!QueryServiceStatus(svc, &st)) break;
+                if (st.dwCurrentState == SERVICE_STOPPED) break;
+                Sleep(100);
+            }
+            CloseServiceHandle(svc);
+        }
+    }
+    CloseServiceHandle(scm);
+}
+
 static int RunTool(const wchar_t *dir, BOOL uninstall)
 {
     wchar_t cmd[MAX_PATH + 64];
@@ -128,13 +155,16 @@ int main(void)
             if (!installed) {
                 printf("Driver is not currently installed.\n");
             } else {
+                printf("Stopping Interception services...\n");
+                StopInterceptionServices();
                 printf("Uninstalling Interception driver...\n\n");
                 RunTool(dir, TRUE);
                 printf("\n");
                 if (!IsDriverInstalled())
                     printf("Driver uninstalled successfully.\n");
                 else
-                    printf("Uninstallation may have failed.\n");
+                    printf("Uninstallation failed. A reboot may be required\n"
+                           "to release the driver files before they can be removed.\n");
             }
             WaitKey();
         } else if (ch == '3') {
