@@ -40,6 +40,13 @@ HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
 const double CHUNK_SEC = 300.0;
 const size_t MAX_BUF   = 3;
 
+// ---- Debug display (off the mouse hot path) ----
+atomic<double> g_debug_sens{1.0};
+atomic<double> g_debug_elapsed{0.0};
+atomic<bool>   g_debug_infinite{false};
+atomic<double> g_debug_total_sec{0.0};
+atomic<bool>   g_debug_thread_stop{false};
+
 struct SensChunk {
     vector<double> t;  // timestamps relative to chunk start (seconds)
     vector<double> s;  // sensitivity multipliers
@@ -283,6 +290,38 @@ void visualize(vector<double>& t, vector<double>& s)
         f << t[i] << "," << s[i] << "\n";
 }
 
+// ---- Debug display thread (~20 Hz, never blocks the mouse loop) ----
+void debugDisplayThread()
+{
+    while (!g_debug_thread_stop.load()) {
+        double sens    = g_debug_sens.load();
+        double elapsed = g_debug_elapsed.load();
+
+        coord.X = 0; coord.Y = 20;
+        SetConsoleCursorPosition(hConsole, coord);
+        SetConsoleTextAttribute(hConsole, 0x08);
+        printf("\nCurrent Sensitivity Multiplier: ");
+        SetConsoleTextAttribute(hConsole, 0xe0);
+        printf("%.5f\n", sens);
+        SetConsoleTextAttribute(hConsole, 0x08);
+
+        if (g_debug_infinite.load()) {
+            printf("Elapsed:             ");
+            SetConsoleTextAttribute(hConsole, 0xe0);
+            int e = (int)elapsed;
+            printf("%02d:%02d:%02d\n\n", e/3600, (e%3600)/60, e%60);
+        } else {
+            double pct = min(elapsed / g_debug_total_sec.load() * 100.0, 100.0);
+            printf("Program Termination: ");
+            SetConsoleTextAttribute(hConsole, 0xe0);
+            printf("%.3f%%\n\n", pct);
+        }
+        SetConsoleTextAttribute(hConsole, 0x08);
+
+        this_thread::sleep_for(chrono::milliseconds(50)); // ~20 Hz
+    }
+}
+
 // ---- Main ----
 int main()
 {
@@ -413,7 +452,16 @@ int main()
     // Step mode tracking
     size_t step_i = 1;  // index of next waypoint in step_t/step_s
 
-    if (DEBUG == 0) printf("\nRunning...\n");
+    g_debug_infinite.store(INFINITE_MODE);
+    g_debug_total_sec.store(total_sec);
+    g_debug_sens.store(sens_mult);
+
+    thread debug_thread;
+    if (DEBUG) {
+        debug_thread = thread(debugDisplayThread);
+    } else {
+        printf("\nRunning...\n");
+    }
 
     while (interception_receive(context, device = interception_wait(context), &stroke, 1) > 0)
     {
@@ -507,27 +555,8 @@ int main()
 
                 if (DEBUG)
                 {
-                    coord.X = 0; coord.Y = 20;
-                    SetConsoleCursorPosition(hConsole, coord);
-                    SetConsoleTextAttribute(hConsole, 0x08);
-                    printf("\nCurrent Sensitivity Multiplier: ");
-                    SetConsoleTextAttribute(hConsole, 0xe0);
-                    printf("%.5f\n", sens_mult);
-                    SetConsoleTextAttribute(hConsole, 0x08);
-
-                    if (INFINITE_MODE) {
-                        printf("Elapsed:             ");
-                        SetConsoleTextAttribute(hConsole, 0xe0);
-                        int e = (int)DSec(Clock::now() - prog_start).count();
-                        printf("%02d:%02d:%02d\n\n", e/3600, (e%3600)/60, e%60);
-                    } else {
-                        double pct = min(DSec(Clock::now() - prog_start).count()
-                                        / total_sec * 100.0, 100.0);
-                        printf("Program Termination: ");
-                        SetConsoleTextAttribute(hConsole, 0xe0);
-                        printf("%.3f%%\n\n", pct);
-                    }
-                    SetConsoleTextAttribute(hConsole, 0x08);
+                    g_debug_sens.store(sens_mult);
+                    g_debug_elapsed.store(DSec(Clock::now() - prog_start).count());
                 }
 
                 double dx = ms.x * sens_mult + carryX;
@@ -566,6 +595,11 @@ int main()
             }
             SetConsoleTextAttribute(hConsole, 0x08);
         }
+    }
+
+    if (DEBUG && debug_thread.joinable()) {
+        g_debug_thread_stop.store(true);
+        debug_thread.join();
     }
 
     SetConsoleTextAttribute(hConsole, 0x02);
