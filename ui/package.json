@@ -1,6 +1,6 @@
 {
   "name": "the-mouse-app",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Electron UI for the.mouse.app",
   "author": "Whisper & El Bad",
   "main": "electron.cjs",
@@ -39,17 +39,20 @@
       }
     ],
     "win": {
+      "icon": "build/icon.png",
       "target": [
         { "target": "nsis", "arch": ["x64"] },
         { "target": "dir",  "arch": ["x64"] }
-      ]
+      ],
+      "artifactName": "${productName} Setup ${version}.${ext}"
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
+      "createDesktopShortcut": "always",
       "createStartMenuShortcut": true,
-      "shortcutName": "the.mouse.app"
+      "shortcutName": "the.mouse.app",
+      "uninstallDisplayName": "the.mouse.app"
     }
   },
   "devDependencies": {

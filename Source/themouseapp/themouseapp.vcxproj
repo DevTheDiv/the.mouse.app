@@ -105,6 +105,7 @@
     <PostBuildEvent>
       <Command>xcopy /Y /D "$(SolutionDir)..\..\Driver\install-interception.exe" "$(OutDir)"
 xcopy /Y /D "$(SolutionDir)Libraries\x86\interception.dll" "$(OutDir)"
+xcopy /Y /D "$(ProjectDir)settings.ini" "$(OutDir)"
 call "$(VCToolsInstallDir)..\..\..\Auxiliary\Build\vcvarsall.bat" x86 &gt;nul
 cl.exe /nologo /O2 /W3 /D_UNICODE /DUNICODE /TC /Fo"$(IntDir)driver_helper.obj" "$(ProjectDir)driver_helper.c" /Fe"$(OutDir)driver_manager.exe" /link /SUBSYSTEM:CONSOLE /LIBPATH:"$(ProjectDir)Libraries\x86" interception.lib user32.lib shell32.lib advapi32.lib</Command>
     </PostBuildEvent>
@@ -129,6 +130,7 @@ cl.exe /nologo /O2 /W3 /D_UNICODE /DUNICODE /TC /Fo"$(IntDir)driver_helper.obj" 
     <PostBuildEvent>
       <Command>xcopy /Y /D "$(SolutionDir)..\..\Driver\install-interception.exe" "$(OutDir)"
 xcopy /Y /D "$(SolutionDir)Libraries\x64\interception.dll" "$(OutDir)"
+xcopy /Y /D "$(ProjectDir)settings.ini" "$(OutDir)"
 call "$(VCToolsInstallDir)..\..\..\Auxiliary\Build\vcvarsall.bat" x64 &gt;nul
 cl.exe /nologo /O2 /W3 /D_UNICODE /DUNICODE /TC /Fo"$(IntDir)driver_helper.obj" "$(ProjectDir)driver_helper.c" /Fe"$(OutDir)driver_manager.exe" /link /SUBSYSTEM:CONSOLE /LIBPATH:"$(ProjectDir)Libraries\x64" interception.lib user32.lib shell32.lib advapi32.lib</Command>
     </PostBuildEvent>
@@ -157,6 +159,7 @@ cl.exe /nologo /O2 /W3 /D_UNICODE /DUNICODE /TC /Fo"$(IntDir)driver_helper.obj" 
     <PostBuildEvent>
       <Command>xcopy /Y /D "$(SolutionDir)..\..\Driver\install-interception.exe" "$(OutDir)"
 xcopy /Y /D "$(SolutionDir)Libraries\x86\interception.dll" "$(OutDir)"
+xcopy /Y /D "$(ProjectDir)settings.ini" "$(OutDir)"
 call "$(VCToolsInstallDir)..\..\..\Auxiliary\Build\vcvarsall.bat" x86 &gt;nul
 cl.exe /nologo /O2 /W3 /D_UNICODE /DUNICODE /TC /Fo"$(IntDir)driver_helper.obj" "$(ProjectDir)driver_helper.c" /Fe"$(OutDir)driver_manager.exe" /link /SUBSYSTEM:CONSOLE /LIBPATH:"$(ProjectDir)Libraries\x86" interception.lib user32.lib shell32.lib advapi32.lib</Command>
     </PostBuildEvent>
@@ -185,6 +188,7 @@ cl.exe /nologo /O2 /W3 /D_UNICODE /DUNICODE /TC /Fo"$(IntDir)driver_helper.obj" 
     <PostBuildEvent>
       <Command>xcopy /Y /D "$(SolutionDir)..\..\Driver\install-interception.exe" "$(OutDir)"
 xcopy /Y /D "$(SolutionDir)Libraries\x64\interception.dll" "$(OutDir)"
+xcopy /Y /D "$(ProjectDir)settings.ini" "$(OutDir)"
 call "$(VCToolsInstallDir)..\..\..\Auxiliary\Build\vcvarsall.bat" x64 &gt;nul
 cl.exe /nologo /O2 /W3 /D_UNICODE /DUNICODE /TC /Fo"$(IntDir)driver_helper.obj" "$(ProjectDir)driver_helper.c" /Fe"$(OutDir)driver_manager.exe" /link /SUBSYSTEM:CONSOLE /LIBPATH:"$(ProjectDir)Libraries\x64" interception.lib user32.lib shell32.lib advapi32.lib</Command>
     </PostBuildEvent>
