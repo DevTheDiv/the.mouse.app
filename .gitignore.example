@@ -1,0 +1,44 @@
+# ── Build output ─────────────────────────────────────────────────
+build/
+Source/themouseapp/x64/
+Source/themouseapp/Win32/
+Source/themouseapp/Sensitiv.*/
+Source/themouseapp/Debug/
+Source/themouseapp/Release/
+
+# ── Visual Studio ────────────────────────────────────────────────
+.vs/
+*.user
+*.suo
+*.sdf
+*.opendb
+*.aps
+*.ncb
+ipch/
+*.pdb
+*.obj
+*.ilk
+*.exp
+*.lib
+*.tlog
+
+# ── Node / Electron ──────────────────────────────────────────────
+node_modules/
+ui/node_modules/
+ui/dist/
+ui/.vite/
+*.log
+npm-debug.log*
+
+# ── electron-builder temp ────────────────────────────────────────
+ui/node_modules/.cache/
+builder-debug.yml
+builder-effective-config.yaml
+
+# ── Misc ─────────────────────────────────────────────────────────
+*.zip
+*.bak
+Thumbs.db
+.DS_Store
+./query
+.gitignore

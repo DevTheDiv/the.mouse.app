@@ -1,0 +1,72 @@
+{
+  "name": "the-mouse-app",
+  "version": "1.0.0",
+  "description": "Electron UI for the.mouse.app",
+  "author": "Whisper & El Bad",
+  "main": "electron.cjs",
+  "scripts": {
+    "dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && electron .\"",
+    "dev:renderer": "vite",
+    "dev:main": "electron .",
+    "build": "vite build",
+    "package": "electron-builder --publish never",
+    "preview": "vite preview"
+  },
+  "build": {
+    "appId": "app.the.mouse",
+    "productName": "the.mouse.app",
+    "copyright": "Copyright © 2025 Whisper & El Bad",
+    "directories": {
+      "output": "../build"
+    },
+    "files": [
+      "dist/**/*",
+      "electron.cjs",
+      "preload.cjs",
+      "assets/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "../Source/themouseapp/x64/Release",
+        "to": "app",
+        "filter": [
+          "themouseapp.exe",
+          "driver_manager.exe",
+          "install-interception.exe",
+          "interception.dll",
+          "settings.ini"
+        ]
+      }
+    ],
+    "win": {
+      "target": [
+        { "target": "nsis", "arch": ["x64"] },
+        { "target": "dir",  "arch": ["x64"] }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "the.mouse.app"
+    }
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^9.1.2",
+    "electron": "^33.4.0",
+    "electron-builder": "^25.1.8",
+    "vite": "^6.0.5",
+    "wait-on": "^8.0.1"
+  },
+  "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.0",
+    "@mui/icons-material": "^6.4.8",
+    "@mui/material": "^6.4.8",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^7.1.5"
+  }
+}

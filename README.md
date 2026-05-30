@@ -1,115 +1,104 @@
-# Sensitivity Randomizer
+# the.mouse.app
 
-**By: Whisper & El Bad**
+A fork of [SensitivityRandomizer](https://github.com/Whisperrr/SensitivityRandomizer) by **Whisper & El Bad** — all credit for the original C++ randomizer engine goes to them.
 
-**Note** - Known issue: If you click *within* the Sensitivity Randomizer window when open, this can sometimes freeze your mouse until potentially a manual restart. A fix for this issue can be found in [4) Fix for Mouse Freeze Issue](#fix-for-mouse-freeze-issue).
+This fork adds:
+- A desktop UI (Electron + React) with a system tray, auto-start, and live controls
+- Built-in driver install / uninstall (no more bat files)
+- X/Y axis decoupling — fix your horizontal/vertical ratio without touching in-game settings
+- A single `build.ps1` that compiles everything end-to-end
 
-## Overview
+---
 
-This tool generates smooth or step-like, randomized sensitivity multiplier curves around a baseline value using [Interception](http://www.oblita.com/interception.html) and [Armadillo](http://arma.sourceforge.net/) in C++. The goal of this tool is to begin to understand the effects of varying mouse sensitivities while aim training.
+## What it does
 
-Ideally, this is something to occasionally **_train_** with, but not to have active during actual gameplay. While there's no concrete proof to back this up, we feel smoothly varying sensitivity might increase reactivity and help train fine motor movements in a way that's superior to keeping with a single sensitivity. Thus, the target audience will be people who play aim trainers such as [Kovaak's FPS Aim Trainer](https://store.steampowered.com/app/824270/KovaaKs_FPS_Aim_Trainer/).
+Intercepts raw mouse input at the kernel level (via the [Interception](http://www.oblita.com/interception.html) driver) and applies a randomized sensitivity multiplier in real-time. Two curve modes:
 
-## Instructions
+- **Smooth** — continuous Gaussian-filtered curve, gradual transitions
+- **Step** — discrete jumps held for a configurable number of seconds
 
-### *1) Download the program*
+Designed for aim trainers like [Kovaak's FPS Aim Trainer](https://store.steampowered.com/app/824270/KovaaKs_FPS_Aim_Trainer/). The idea is that varying sensitivity during practice builds adaptability and fine motor control beyond what a single fixed sensitivity can.
 
-* Clicking the download link below will give you access to **_all_** the files needed to successfully run this tool.
+---
 
-| [Download Here!](https://github.com/Whisperrr/SensitivityChanger/releases/download/v0.5/SensitivityRandomizer-v0.5.2.zip)|     
-| ------------- |
+## Requirements
 
-* You may also download the *SensitivityRandomizer.zip* file directly from my [releases](https://github.com/Whisperrr/SensitivityRandomizer/releases).  
-* Or clone/download the repo from my [GitHub](https://github.com/Whisperrr/SensitivityRandomizer).
+- Windows 10/11 x64
+- **Secure Boot must be disabled** (required by the Interception driver)
+- Visual Studio 2022 with "Desktop development with C++" (to build from source)
+- Node.js 18+
 
-### *2) Install Interception*
+---
 
-Once you extract the ZIP file, you must first install Interception. More on what that is in the _Details_ section if you care.
+## Installation
 
-The process is _very_ similar to Kovaak and Povohat's [InterAccel](http://mouseaccel.blogspot.com/2015/12/new-method-for-mouse-acceleration.html), thus some of the installation code/executables are borrowed from them.
+### From a release build
 
-1) Double click the *driver_install.bat* file from the extracted ZIP file (It will ask for Admin priviledges).
-2) Install the Visual C++ Redistributable for Visual Studio 2015 from https://www.microsoft.com/en-us/download/details.aspx?id=48145 if you don't have it.
-3) **Reboot**. Yes, you actually need to reboot because of first step, or it won't work.
+1. Run `the.mouse.app Setup.exe` — or use the portable `win-unpacked\` folder directly.
+2. On first launch the app installs to the system tray and enables auto-start.
+3. Go to **Settings → Interception Driver → Install Driver** and follow the UAC prompt.
+4. **Reboot.** The driver requires a reboot to activate.
+5. Return to the **Randomizer** tab and hit **Start**.
 
-Once this is done, you should be able to run the tool.
+### Building from source
 
-### *3) Run the program*
+```powershell
+.\build.ps1           # full build: C++ -> Vite -> electron-builder
+.\build.ps1 -SkipCpp  # UI only (C++ already built)
+.\build.ps1 -SkipUi   # C++ only
+```
 
-* Run the **_SensitivityRandomizer.exe_** file located in your extracted ZIP folder.
-* Optional, although highly recommended: [Fix Mouse Freeze Issue](#fix-for-mouse-freeze-issue)
+Output lands in `build\` — `win-unpacked\` for the portable version and `the.mouse.app Setup.exe` for the installer.
 
-**Note:** The program will begin to generate a complete sensitivity curve. Your mouse may initially freeze for a few seconds while generating this curve. If you want to stop randomizing your sensitivity at any time, either press **Control+C** or exit the application manually. 
+---
 
-This program will look for a _settings.ini_ file that contains several key pieces of information that you can modify. If no settings file is found, it will use default values I've chosen. These components are:
+## Settings
 
-* Type
-* Baseline_Sensitivity
-* Min_Sensitivity
-* Max_Sensitivity
-* Spread
-* Smoothing
-* Timestep (seconds)
-* Runtime (minutes)
-* Visualize
-* Debug
+All settings are managed through the UI and saved to `settings.ini`. You can also edit the file directly — the app reads it on startup.
 
-The *Type* value determines whether you want your generated sensitivities to be *step-like* or *smooth*. It takes on two values: **0** (step-like) or **1** (smooth). Setting Type = **1** will result in a sensitivity curve similar to this **and behave exactly as previous iterations of the randomizer (v0.1-v0.4)**:
-![](./Source/SmoothGraph.png)
+| Setting | Default | Description |
+|---|---|---|
+| `Smooth` | `1` | Curve mode: `1` = smooth (continuous Gaussian curve), `0` = step (discrete jumps) |
+| `Baseline_Sensitivity` | `1` | Center of the randomization range. `1` = your current in-game sensitivity |
+| `Min_Sensitivity` | `0.5` | Lower bound multiplier (0.5 = half your sensitivity) |
+| `Max_Sensitivity` | `2` | Upper bound multiplier (2 = double your sensitivity) |
+| `Spread` | `0.1` | Lognormal variance of the random walk — controls how far sensitivity wanders from baseline |
+| `Smoothing` | `5` | **Smooth mode only.** `0` = off (raw noise), `1` = low, `2` = medium, `3` = high, `4` = very high, `5` = maximum |
+| `Timestep` | `3` | **Step mode only.** Seconds each sensitivity value is held before the next jump |
+| `Runtime` | `0` | Session length in minutes. `0` = run indefinitely |
+| `X_Sensitivity` | `1` | Constant horizontal axis multiplier (applied on top of the randomizer) |
+| `Y_Sensitivity` | `1` | Constant vertical axis multiplier (applied on top of the randomizer) |
 
-whereas setting Type = **0** will result in something like this:
-![](./Source/StepGraph.png)
+### Tips
 
-The *Baseline_Sensitivity* value determines determines where you'd like to vary your sensitivity multiplier around. **This should almost always be set to 1**, as this means you'll vary your sensitivity around a value *1x* your current sensitivity value (aka still your current sensitivity).
+- **Baseline should almost always be 1** — you're multiplying around your existing in-game sensitivity, not replacing it.
+- **Spread** is counterintuitive: very high values don't always produce wilder swings. Because the Gaussian smoothing actively fights noise, too much spread can actually flatten the curve. The original authors recommended starting around **0.6** and *decreasing* toward 0.1 if you want less variation, not increasing it.
+- **Smoothing 0** in smooth mode is a fun experiment — it produces raw, jagged noise rather than a flowing curve.
+- **X/Y decoupling** is a constant multiplier applied regardless of whether the randomizer is running. Useful for aspect ratio corrections (e.g. 16:9 → 4:3 ≈ Y × 0.5625).
 
-The *Min_Sensitivity* and *Max_Sensitivity* values determine the largest and smallest multipliers that you want your sensitivity to reach. I usually keep Min_Sensitivity = **0.50** (half your default sensitivity), and Max_Sensitivity = **2** (twice your default sensitivity).
+---
 
-_Spread_ determines how fast/wide swings in sensitivities can happen. Counterintuitively, increasing the spread value will not _always_ increase how crazy your generated sensitivity curve is. Because we're attempting to create smooth curves, too much noise (no apparent patterns) will often not produce large variations around the baseline value. We'll be tweaking this in the future, but for now, I keep it at **0.6**. If you don't feel this is enough. I'd recommend actually _decreasing_ the value to, say, 0.1 to test.
+## Usage
 
-_Smoothing_ (added in v0.3) determines, well, how smooth you'd like your randomization to be (given that you choose a *smooth* graph rather than *step-like*). The smoothing parameter can take on several values:
+- **Start / Stop** from the Randomizer tab or the tray right-click menu.
+- **Pause / Resume** — press **P** in the console window while the randomizer is running.
+- **Close** hides to tray. Right-click the tray icon → **Quit** to exit fully.
 
-* 0: No smoothing performed (interesting option to say the least)
-* 1: Low amount of smoothing
-* 2: Medium amount of smoothing
-* 3: High amount of smoothing
-* 4: Very high amount of smoothing
-* 5: [This smooth](https://www.youtube.com/watch?v=ZMByI4s-D-Y)
+---
 
-I have this value set to **2** by default.
+## Driver notes
 
-*Timestep* (added in v0.5) allows you to control how **often** your sensitivity changes when using the **step-like** sensitivity randomization option. By default, I have this set to **10**, meaning your sensitivity will change once every *ten* seconds.
+The Interception driver requires:
+- Secure Boot **disabled** in BIOS/UEFI
+- A **reboot** after install or uninstall before the change takes effect
+- Admin privileges only for install/uninstall — normal use requires no elevation
 
-**Note:** If you set _Type = 1_ (generating a smooth curve), you **won't** be able to modify the timestep variable. It will be forced at a very small value (0.001) to ensure the generated sensitivity curve is actually _smooth_. To be able to modify this variable, you'll need to first have _Type = 0_ set above to specify you no longer want a smooth sensitivity curve.
+---
 
-*Runtime (minutes)* - Determines how long you want your program to run for before you need to restart. I keep this value at **30** (for 30 minutes).
+## Credits
 
-*Visualize* allows you to visualize the sensitivity curve the tool generates. By default, this is set to **0** (so no visualization), however setting it to 1 will generate a .txt file called "sens_list.txt". For now, I've included a script called _visualize.py_ that can be run to visualize this output.
+Original tool by **Whisper** and **El Bad**:
+- GitHub: [Whisperrr/SensitivityRandomizer](https://github.com/Whisperrr/SensitivityRandomizer)
+- Reddit write-up: [r/FPSAimTrainer](https://www.reddit.com/r/FPSAimTrainer/comments/cve6oi/tool_for_smoothly_randomizing_sensitivity/)
 
-**Note:** You'll need to first have [Python](https://realpython.com/installing-python/) _and_ [matplotlib](https://matplotlib.org/3.1.1/users/installing.html) installed.
-
-*Debug* lets you see a live value of your current sensitivity multiplier and a live percentage of time left before needing to restart. By default this is set to **1**, however if you're experiencing any performance issues, I'd recommend setting this to 0.
-
-***
-
-Also, you can press __"P"__ on your keyboard to pause/unpause the program (toggle). So if you find a particular sensitivity you like (or hate for that matter), you can now pause to practice it for a while. With the "Debug" option set to 1, you'll be able to see a _PAUSE_ icon appear.
-
-***
-
-## Fix for Mouse Freeze Issue
-
-Until a better solution can be found, I've created a [YouTube video](https://youtu.be/0Gg1Gep0CK8) that walks you through a fix for this issue (disabling QuickEdit mode in the console). You can also follow the steps below:
-
-1. Double-click SensitivityRandomizer.exe
-2. Right-click the title bar at the top of the window (can be seen in the video)
-3. Navigate to *Defaults*
-4. Uncheck  *QuickEdit Mode*
-5. Restart the program
-
-***
-***
-
-## Details
-
-If you'd like to know more about how the program actually works, please see [this Reddit post](https://www.reddit.com/r/FPSAimTrainer/comments/cve6oi/tool_for_smoothly_randomizing_sensitivity/) where I describe exactly that! If you have any issues running the program, you can:
-* Message **El Bad#1806** or **Whisper#4442** on Discord.
-* Join the official [FPS Aim Trainer Discord](https://discordapp.com/invite/Z8hGxnM).
+This fork is maintained separately and is not affiliated with the original authors.
