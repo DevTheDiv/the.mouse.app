@@ -1,7 +1,7 @@
 {
-  "name": "the-mouse-app",
-  "version": "1.1.1",
-  "description": "A professional kernel-level mouse customization tool featuring independent axial acceleration, sensitivity randomizing, and system-level mouse control.",
+  "name": "themouseapp",
+  "version": "1.2.0",
+  "description": "TheMouse.app",
   "author": "DevTheDiv",
   "main": "electron.cjs",
   "scripts": {
@@ -13,9 +13,10 @@
     "preview": "vite preview"
   },
   "build": {
-    "appId": "app.the.mouse",
-    "productName": "the.mouse.app",
-    "copyright": "Copyright © 2025 Whisper & El Bad",
+    "appId": "app.themouse",
+    "productName": "TheMouse.app",
+    "executableName": "TheMouse.app",
+    "copyright": "Copyright © 2025 DevTheDiv",
     "directories": {
       "output": "../build"
     },
@@ -51,8 +52,8 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": "always",
       "createStartMenuShortcut": true,
-      "shortcutName": "the.mouse.app",
-      "uninstallDisplayName": "the.mouse.app",
+      "shortcutName": "TheMouse.app",
+      "uninstallDisplayName": "TheMouse.app",
       "perMachine": true
     }
   },
