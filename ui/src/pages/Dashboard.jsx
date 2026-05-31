@@ -181,7 +181,7 @@ export default function Dashboard() {
         </Box>
       </Box>
 
-      <Snackbar open={!!error} autoHideDuration={7000} onClose={() => setError(null)}>
+      <Snackbar open={!!error} autoHideDuration={7000} onClose={() => setError(null)} anchorOrigin={{ vertical: 'top', horizontal: 'center' }}>
         <Alert severity="error" onClose={() => setError(null)}>{error}</Alert>
       </Snackbar>
     </Box>

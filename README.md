@@ -6,9 +6,9 @@ Three independent modules — run any combination, or none (pass-through):
 
 | Module | What it does |
 |---|---|
+| **Sensitivity** | Applies unified or independent horizontal and vertical multipliers |
 | **Sensitivity Randomizer** | Randomizes your sensitivity on a configurable curve during practice sessions |
-| **X/Y Decoupling** | Applies independent horizontal and vertical multipliers |
-| **Acceleration Curve** | Maps mouse speed (mm/s) to a sensitivity multiplier via a custom curve |
+| **Acceleration Curve** | Maps axial mouse speed (mm/s) to sensitivity multipliers via custom curves |
 
 ---
 
@@ -45,6 +45,18 @@ Output lands in `build\` — `win-unpacked\` for the portable version and `the.m
 
 ## Modules
 
+### Sensitivity (formerly X/Y Decoupling)
+
+Applies a constant multiplier to your mouse movement. Supports both linked and independent axis control.
+
+- **Linked Mode** — a single slider controls both X and Y axes for perfect uniformity.
+- **Decoupled Mode** — set independent horizontal and vertical multipliers. Useful for aspect ratio corrections (e.g. 16:9 → 4:3) or fine-tuning vertical feel.
+
+| Setting | Default | Description |
+|---|---|---|
+| `X_Sensitivity` | `1` | Horizontal axis multiplier |
+| `Y_Sensitivity` | `1` | Vertical axis multiplier |
+
 ### Sensitivity Randomizer
 
 Randomizes your sensitivity multiplier over time using a stateful random walk. Two modes:
@@ -64,57 +76,49 @@ Designed for aim trainers like [Kovaak's](https://store.steampowered.com/app/824
 | `Smoothing` | `5` | Smooth mode only. `0` = raw noise, `5` = maximum smoothing |
 | `Timestep` | `3` | Step mode only. Seconds each value is held |
 
-### X/Y Decoupling
-
-Applies a constant independent multiplier to each axis. Useful for:
-- Correcting aspect ratio mismatches (e.g. 16:9 → 4:3: Y × 0.5625)
-- Matching horizontal/vertical feel across different games
-- Fine-tuning vertical sensitivity independently of horizontal
-
-| Setting | Default | Description |
-|---|---|---|
-| `X_Sensitivity` | `1` | Horizontal axis multiplier |
-| `Y_Sensitivity` | `1` | Vertical axis multiplier |
-
 ### Acceleration Curve
 
-Maps raw mouse speed (mm/s) to a sensitivity multiplier using a custom curve you draw in the editor. The curve is pre-computed into a 512-entry lookup table and applied on the hot path with a single array lookup — no runtime math.
+Maps raw mouse speed (mm/s) to a sensitivity multiplier using custom curves. Features **True Axial Independence** — horizontal and vertical multipliers are calculated based on their own axial velocities.
 
 **Editor features:**
-- Smooth (Hermite spline), corner (linear), and jump (step) point types — double-click to cycle
-- Multi-curve mode: independent X and Y curves
-- Scroll to zoom, middle-drag to pan, Shift to snap to grid
-- Hover the axis label strips to scale only that axis
-- Live dot and trail shows where your current mouse speed falls on the curve in real-time
-- DPI-aware X-axis — set your mouse DPI in Settings to display speed in mm/s
-
-| Setting | Default | Description |
-|---|---|---|
-| `Mouse_DPI` | `800` | Your mouse DPI, used for mm/s display in the curve editor |
+- **Split X/Y Mode**: Draw completely independent curves for horizontal and vertical acceleration.
+- **Visibility & Locking**: Toggle visibility or lock curves to edit one without affecting the other.
+- **Professional Visualizer**: High-fidelity live dots with trails, crosshairs, and axis labels show your exact speed and multiplier in real-time (30Hz).
+- **Point Types**: Smooth (Hermite spline), corner (linear), and jump (step) — double-click to cycle.
+- **Interaction**: Scroll to zoom, middle-drag to pan, Shift to snap to grid.
 
 ---
 
 ## Settings
 
-All settings are managed through the UI and written to `settings.ini`. You can also edit the file directly — the app reads it on each start.
+### Windows Mouse Settings
+
+Directly control Windows system-level settings within the app:
+- **Enhance Pointer Precision**: Toggle the built-in Windows mouse acceleration.
+- **Pointer Speed**: Adjust the base Windows sensitivity (1-20).
 
 ### Global hotkeys
 
-Configurable system-wide shortcuts — set them in **Settings → Global Hotkeys**.
+Configurable system-wide shortcuts.
 
-| Setting | Description |
-|---|---|
-| `Hotkey_StartStop` | Toggle the app on/off from anywhere |
-| `Hotkey_Pause` | Pause/resume the randomizer |
+| Setting | Default | Description |
+|---|---|---|
+| `Hotkey_StartStop` | `Ctrl+F12` | Toggle the app on/off from anywhere |
+| `Hotkey_Pause` | `None` | Pause/resume the randomizer |
+
+### Persistence & Reliability
+
+- **State Persistence**: The app remembers if the engine was active and automatically resumes on startup.
+- **Auto-Recovery**: Automatically repairs or regenerates `settings.ini` if it becomes missing or corrupted.
+- **Migration**: Seamlessly merges new features and defaults when upgrading from older versions.
 
 ---
 
 ## Usage
 
-- **Start / Stop** from the Dashboard or the tray right-click menu.
-- **Pause / Resume** — use the configured hotkey, or press **P** in the console window.
+- **Start / Stop** from the Dashboard, system tray, or via **Ctrl+F12**.
 - **Close** hides to tray. Right-click tray icon → **Quit** to exit fully.
-- Each module has its own enable toggle — disabling a module is a pass-through for that transform.
+- **Apply** settings to restart the driver and activate changes.
 
 ---
 
@@ -123,7 +127,6 @@ Configurable system-wide shortcuts — set them in **Settings → Global Hotkeys
 The Interception driver requires:
 - Secure Boot **disabled** in BIOS/UEFI
 - A **reboot** after install before the driver is active
-- A **reboot** after uninstall before the driver files are fully removed
 - Admin privileges only for install/uninstall — normal use requires no elevation
 
 When the app is stopped, the Interception driver is a transparent pass-through — your mouse behaves completely normally.

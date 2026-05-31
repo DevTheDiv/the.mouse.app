@@ -101,7 +101,7 @@ export default function App() {
           <TitleBar />
           <Box sx={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
             <Sidebar />
-            <Box sx={{ flex: 1, overflow: 'auto' }}>
+            <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'auto' }}>
               <Routes>
                 <Route path="/"            element={<Dashboard />}      />
                 <Route path="/sensitivity" element={<Sensitivity />}    />

@@ -142,6 +142,18 @@ function buildPath(sorted, tangents, view) {
   return path;
 }
 
+// ── Presets ───────────────────────────────────────────────────────────────
+const PRESETS = [
+  { label: 'Flat 1×',    pts: [[0,1,'smooth'],[1,1,'smooth']] },
+  { label: 'Gentle',     pts: [[0,0.9,'smooth'],[0.27,1.3,'smooth'],[1,2.0,'smooth']] },
+  { label: 'Aggressive', pts: [[0,0.5,'smooth'],[0.13,1.2,'smooth'],[0.4,2.0,'smooth'],[1,2.8,'smooth']] },
+  { label: 'Corner',     pts: [[0,1,'smooth'],[0.2,1,'corner'],[0.6,2.0,'smooth'],[1,2.5,'smooth']] },
+  { label: 'Jump',       pts: [[0,1,'smooth'],[0.2,2.0,'jump'],[1,2.5,'smooth']] },
+];
+
+const TYPE_COLORS = { smooth: '#00e5ff', corner: '#ff9800', jump: '#f44336' };
+const TYPE_CYCLE  = { smooth: 'corner', corner: 'jump', jump: 'smooth' };
+
 // ── Component ─────────────────────────────────────────────────────────────
 export default function AccelCurve() {
   const { settings } = useSettings();
@@ -477,8 +489,8 @@ export default function AccelCurve() {
   const liveTrailY = trailYRef.current;
 
   return (
-    <Box sx={{ p: 3 }}>
-      <Paper sx={{ p: 2, mb: 3, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+    <Box sx={{ p: 3, height: '100%', display: 'flex', flexDirection: 'column', boxSizing: 'border-box' }}>
+      <Paper sx={{ p: 2, mb: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
         <Box>
           <Typography variant="body1" sx={{ fontWeight: 600 }}>Acceleration Curve</Typography>
           <Typography variant="caption" color="text.secondary">
@@ -488,8 +500,8 @@ export default function AccelCurve() {
         <Switch checked={enabled} onChange={e => setEnabled(e.target.checked)} color="primary" />
       </Paper>
 
-      <Paper sx={{ p: 2, mb: 3, opacity: enabled ? 1 : 0.5, transition: 'opacity 0.2s' }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5, flexWrap: 'wrap', gap: 1 }}>
+      <Paper sx={{ p: 2, flex: 1, minHeight: 0, opacity: enabled ? 1 : 0.5, transition: 'opacity 0.2s', display: 'flex', flexDirection: 'column' }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5, flexWrap: 'wrap', gap: 1, flexShrink: 0 }}>
           <Box>
             <Typography variant="h6" sx={{ mb: 0.25 }}>Curve Editor</Typography>
             <Typography variant="caption" color="text.secondary">
@@ -518,7 +530,24 @@ export default function AccelCurve() {
           </Box>
         </Box>
 
-        <Box sx={{ position: 'relative', width: '100%', height: SVG_H, bgcolor: 'rgba(0,0,0,0.4)', borderRadius: 1, border: '1px solid rgba(0,229,255,0.1)', overflow: 'hidden' }}>
+        {/* Presets */}
+        <Box sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap', flexShrink: 0 }}>
+          <Typography variant="caption" sx={{ alignSelf: 'center', mr: 1, color: 'text.secondary', fontWeight: 600 }}>Presets:</Typography>
+          {PRESETS.map(p => (
+            <Button
+              key={p.label} size="small" variant="outlined" color="primary"
+              sx={{ fontSize: '0.65rem', py: 0, minWidth: 0 }}
+              onClick={() => {
+                const pts = p.pts.map(([x, y, t]) => ({ id: nextId.current++, x: x * maxSpeed, y, type: t }));
+                if (activeCurve === 'X') setPointsX(pts); else setPointsY(pts);
+              }}
+            >
+              {p.label}
+            </Button>
+          ))}
+        </Box>
+
+        <Box sx={{ position: 'relative', flex: 1, width: '100%', bgcolor: 'rgba(0,0,0,0.4)', borderRadius: 1, border: '1px solid rgba(0,229,255,0.1)', overflow: 'hidden', minHeight: 200 }}>
           <svg ref={svgRef} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', cursor, userSelect: 'none' }} viewBox={`0 0 ${SVG_W} ${SVG_H}`} preserveAspectRatio="none"
             onMouseDown={handleSvgMouseDown} onMouseMove={handleMouseMove} onMouseUp={endInteraction} onMouseLeave={handleMouseLeave}>
             <defs>
@@ -549,7 +578,7 @@ export default function AccelCurve() {
               )}
               {visibleX && (
                 <>
-                  <path d={svgPathX.split('L')[0] + ` L ${(PAD+PLOT_W).toFixed(1)},${(SVG_H-PAD).toFixed(1)} L ${PAD},${(SVG_H-PAD).toFixed(1)} Z`} fill={multiCurve ? 'transparent' : `${COLOR_X}10`} />
+                  <path d={svgPathX + ` L ${(PAD + PLOT_W).toFixed(1)},${(SVG_H - PAD).toFixed(1)} L ${PAD},${(SVG_H - PAD).toFixed(1)} Z`} fill={multiCurve ? 'transparent' : `${COLOR_X}10`} />
                   <path d={svgPathX} fill="none" stroke={COLOR_X} strokeWidth={2} opacity={lockedX ? 0.4 : 1} strokeDasharray={lockedX ? "4,2" : "0"} />
                 </>
               )}
@@ -623,7 +652,7 @@ export default function AccelCurve() {
           )}
         </Box>
 
-        <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
           <Stack direction="row" spacing={2} divider={<Divider orientation="vertical" flexItem />}>
             <Stack direction="row" alignItems="center" spacing={1}>
               <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: COLOR_X }} />
@@ -647,14 +676,16 @@ export default function AccelCurve() {
       </Paper>
 
       <Fade in={isDirty || saving}>
-        <Paper elevation={12} sx={{ position: 'fixed', bottom: 24, right: 24, p: 1.5, borderRadius: 3, display: 'flex', gap: 1.5, bgcolor: 'background.paper', border: '1px solid', borderColor: 'primary.main', zIndex: 1000 }}>
+        <Paper elevation={12} sx={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', p: 1.5, borderRadius: 3, display: 'flex', gap: 1.5, bgcolor: 'background.paper', border: '1px solid', borderColor: 'primary.main', zIndex: 1000 }}>
           <Button variant="text" color="inherit" startIcon={<RestartAlt />} onClick={handleReset} disabled={saving} size="small">Reset</Button>
           <Button variant="contained" color="primary" size="small" startIcon={saving ? <CircularProgress size={18} color="inherit" /> : <Save />} onClick={handleApply} disabled={saving} sx={{ px: 3, fontWeight: 700 }}>
             {saving ? 'Applying…' : 'Apply'}
           </Button>
         </Paper>
       </Fade>
-      <Snackbar open={!!snack} autoHideDuration={4000} onClose={() => setSnack(null)}><Alert severity={snack?.type}>{snack?.msg}</Alert></Snackbar>
+      <Snackbar open={!!snack} autoHideDuration={4000} onClose={() => setSnack(null)} anchorOrigin={{ vertical: 'top', horizontal: 'center' }}>
+        <Alert severity={snack?.type}>{snack?.msg}</Alert>
+      </Snackbar>
     </Box>
   );
 }

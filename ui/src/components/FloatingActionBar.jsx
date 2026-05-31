@@ -24,7 +24,8 @@ export default function FloatingActionBar() {
           sx={{
             position: 'fixed',
             bottom: 24,
-            right: 24,
+            left: '50%',
+            transform: 'translateX(-50%)',
             p: 1.5,
             borderRadius: 3,
             display: 'flex',
@@ -72,7 +73,7 @@ export default function FloatingActionBar() {
         </Paper>
       </Fade>
 
-      <Snackbar open={!!snack} autoHideDuration={4000} onClose={() => setSnack(null)}>
+      <Snackbar open={!!snack} autoHideDuration={4000} onClose={() => setSnack(null)} anchorOrigin={{ vertical: 'top', horizontal: 'center' }}>
         <Alert severity={snack?.type} onClose={() => setSnack(null)}>
           {snack?.msg}
         </Alert>

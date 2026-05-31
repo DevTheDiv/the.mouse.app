@@ -308,7 +308,7 @@ export default function Settings() {
         />
       </Paper>
 
-      <Snackbar open={!!snack} autoHideDuration={5000} onClose={() => setSnack(null)}>
+      <Snackbar open={!!snack} autoHideDuration={5000} onClose={() => setSnack(null)} anchorOrigin={{ vertical: 'top', horizontal: 'center' }}>
         <Alert severity={snack?.type} onClose={() => setSnack(null)}>{snack?.msg}</Alert>
       </Snackbar>
     </Box>

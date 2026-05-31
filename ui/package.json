@@ -1,7 +1,7 @@
 {
   "name": "the-mouse-app",
-  "version": "1.1.0",
-  "description": "Electron UI for the.mouse.app",
+  "version": "1.1.1",
+  "description": "A professional kernel-level mouse customization tool featuring independent axial acceleration, sensitivity randomizing, and system-level mouse control.",
   "author": "DevTheDiv",
   "main": "electron.cjs",
   "scripts": {

@@ -479,8 +479,7 @@ function setupIPC() {
     const speed = enabled ? 1 : 0;
     const t1    = enabled ? 6 : 0;
     const t2    = enabled ? 10 : 0;
-    const psCommand = `
-      Add-Type -TypeDefinition '
+    const psCommand = `$code = @'
       using System;
       using System.Runtime.InteropServices;
       namespace Win32 {
@@ -488,21 +487,31 @@ function setupIPC() {
               [DllImport("user32.dll")]
               public static extern bool SystemParametersInfo(uint uiAction, uint uiParam, IntPtr pvParam, uint fWinIni);
           }
-      }';
-      Set-ItemProperty 'HKCU:\\Control Panel\\Mouse' -Name 'MouseSpeed' -Value ${speed};
-      Set-ItemProperty 'HKCU:\\Control Panel\\Mouse' -Name 'MouseThreshold1' -Value ${t1};
-      Set-ItemProperty 'HKCU:\\Control Panel\\Mouse' -Name 'MouseThreshold2' -Value ${t2};
-      $mouseParams = [int[]](${t1}, ${t2}, ${speed});
-      $ptr = [System.Runtime.InteropServices.Marshal]::AllocHGlobal(12);
-      [System.Runtime.InteropServices.Marshal]::Copy($mouseParams, 0, $ptr, 3);
-      [Win32.WinApi]::SystemParametersInfo(0x0004, 0, $ptr, 0x03);
-      [System.Runtime.InteropServices.Marshal]::FreeHGlobal($ptr);
-    `.replace(/\n/g, ' ').trim();
+      }
+'@
+      if (-not ([System.Management.Automation.PSTypeName]'Win32.WinApi').Type) {
+          Add-Type -TypeDefinition $code
+      }
+      Set-ItemProperty 'HKCU:\\Control Panel\\Mouse' -Name 'MouseSpeed' -Value ${speed}
+      Set-ItemProperty 'HKCU:\\Control Panel\\Mouse' -Name 'MouseThreshold1' -Value ${t1}
+      Set-ItemProperty 'HKCU:\\Control Panel\\Mouse' -Name 'MouseThreshold2' -Value ${t2}
+      $mouseParams = [int[]](${t1}, ${t2}, ${speed})
+      $ptr = [System.Runtime.InteropServices.Marshal]::AllocHGlobal(12)
+      [System.Runtime.InteropServices.Marshal]::Copy($mouseParams, 0, $ptr, 3)
+      [Win32.WinApi]::SystemParametersInfo(0x0004, 0, $ptr, 0x03)
+      [System.Runtime.InteropServices.Marshal]::FreeHGlobal($ptr)
+    `.trim();
     
     try {
-      execSync(`powershell -Command "${psCommand}"`);
+      const tmpPath = path.join(app.getPath('temp'), `set-accel-${Date.now()}.ps1`);
+      fs.writeFileSync(tmpPath, psCommand, 'utf8');
+      execSync(`powershell -ExecutionPolicy Bypass -File "${tmpPath}"`, { windowsHide: true });
+      fs.unlinkSync(tmpPath);
       return true;
-    } catch { return false; }
+    } catch (e) {
+      console.error('Failed to set windows accel', e);
+      return false;
+    }
   });
 
   ipcMain.handle('get-windows-mouse-speed', () => {
@@ -513,8 +522,7 @@ function setupIPC() {
   });
 
   ipcMain.handle('set-windows-mouse-speed', (_, val) => {
-    const psCommand = `
-      Add-Type -TypeDefinition '
+    const psCommand = `$code = @'
       using System;
       using System.Runtime.InteropServices;
       namespace Win32 {
@@ -522,14 +530,24 @@ function setupIPC() {
               [DllImport("user32.dll")]
               public static extern bool SystemParametersInfo(uint uiAction, uint uiParam, IntPtr pvParam, uint fWinIni);
           }
-      }';
-      [Win32.WinApi]::SystemParametersInfo(0x0071, 0, [IntPtr]${val}, 0x03);
-    `.replace(/\n/g, ' ').trim();
+      }
+'@
+      if (-not ([System.Management.Automation.PSTypeName]'Win32.WinApi').Type) {
+          Add-Type -TypeDefinition $code
+      }
+      [Win32.WinApi]::SystemParametersInfo(0x0071, 0, [IntPtr]${val}, 0x03)
+    `.trim();
     
     try {
-      execSync(`powershell -Command "${psCommand}"`);
+      const tmpPath = path.join(app.getPath('temp'), `set-speed-${Date.now()}.ps1`);
+      fs.writeFileSync(tmpPath, psCommand, 'utf8');
+      execSync(`powershell -ExecutionPolicy Bypass -File "${tmpPath}"`, { windowsHide: true });
+      fs.unlinkSync(tmpPath);
       return true;
-    } catch { return false; }
+    } catch (e) {
+      console.error('Failed to set windows mouse speed', e);
+      return false;
+    }
   });
 
   ipcMain.on('window-minimize', () => mainWindow.minimize());
