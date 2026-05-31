@@ -1,23 +1,14 @@
 # the.mouse.app
 
-A fork of [SensitivityRandomizer](https://github.com/Whisperrr/SensitivityRandomizer) by **Whisper & El Bad** — all credit for the original C++ randomizer engine goes to them.
+A Windows desktop tool for real-time mouse customization, built for aim trainers and competitive gaming. Intercepts raw mouse input at the kernel level via the [Interception](http://www.oblita.com/interception.html) driver and applies modifications before they reach any game or application.
 
-This fork adds:
-- A desktop UI (Electron + React) with a system tray, auto-start, and live controls
-- Built-in driver install / uninstall (no more bat files)
-- X/Y axis decoupling — fix your horizontal/vertical ratio without touching in-game settings
-- A single `build.ps1` that compiles everything end-to-end
+Three independent modules — run any combination, or none (pass-through):
 
----
-
-## What it does
-
-Intercepts raw mouse input at the kernel level (via the [Interception](http://www.oblita.com/interception.html) driver) and applies a randomized sensitivity multiplier in real-time. Two curve modes:
-
-- **Smooth** — continuous Gaussian-filtered curve, gradual transitions
-- **Step** — discrete jumps held for a configurable number of seconds
-
-Designed for aim trainers like [Kovaak's FPS Aim Trainer](https://store.steampowered.com/app/824270/KovaaKs_FPS_Aim_Trainer/). The idea is that varying sensitivity during practice builds adaptability and fine motor control beyond what a single fixed sensitivity can.
+| Module | What it does |
+|---|---|
+| **Sensitivity Randomizer** | Randomizes your sensitivity on a configurable curve during practice sessions |
+| **X/Y Decoupling** | Applies independent horizontal and vertical multipliers |
+| **Acceleration Curve** | Maps mouse speed (mm/s) to a sensitivity multiplier via a custom curve |
 
 ---
 
@@ -26,7 +17,7 @@ Designed for aim trainers like [Kovaak's FPS Aim Trainer](https://store.steampow
 - Windows 10/11 x64
 - **Secure Boot must be disabled** (required by the Interception driver)
 - Visual Studio 2022 with "Desktop development with C++" (to build from source)
-- Node.js 18+
+- Node.js 18+ (to build from source)
 
 ---
 
@@ -38,12 +29,12 @@ Designed for aim trainers like [Kovaak's FPS Aim Trainer](https://store.steampow
 2. On first launch the app installs to the system tray and enables auto-start.
 3. Go to **Settings → Interception Driver → Install Driver** and follow the UAC prompt.
 4. **Reboot.** The driver requires a reboot to activate.
-5. Return to the **Randomizer** tab and hit **Start**.
+5. Configure your modules and hit **Start** from the Dashboard.
 
 ### Building from source
 
 ```powershell
-.\build.ps1           # full build: C++ -> Vite -> electron-builder
+.\build.ps1           # full build: C++ → Vite → electron-builder
 .\build.ps1 -SkipCpp  # UI only (C++ already built)
 .\build.ps1 -SkipUi   # C++ only
 ```
@@ -52,37 +43,78 @@ Output lands in `build\` — `win-unpacked\` for the portable version and `the.m
 
 ---
 
-## Settings
+## Modules
 
-All settings are managed through the UI and saved to `settings.ini`. You can also edit the file directly — the app reads it on startup.
+### Sensitivity Randomizer
+
+Randomizes your sensitivity multiplier over time using a stateful random walk. Two modes:
+
+- **Smooth** — continuous Gaussian-filtered curve, gradual and flowing transitions
+- **Step** — discrete jumps held for a configurable number of seconds
+
+Designed for aim trainers like [Kovaak's](https://store.steampowered.com/app/824270/KovaaKs_FPS_Aim_Trainer/). Varying sensitivity during practice builds adaptability and fine motor control beyond what a fixed sensitivity can.
 
 | Setting | Default | Description |
 |---|---|---|
-| `Smooth` | `1` | Curve mode: `1` = smooth (continuous Gaussian curve), `0` = step (discrete jumps) |
-| `Baseline_Sensitivity` | `1` | Center of the randomization range. `1` = your current in-game sensitivity |
-| `Min_Sensitivity` | `0.5` | Lower bound multiplier (0.5 = half your sensitivity) |
-| `Max_Sensitivity` | `2` | Upper bound multiplier (2 = double your sensitivity) |
-| `Spread` | `0.1` | Lognormal variance of the random walk — controls how far sensitivity wanders from baseline |
-| `Smoothing` | `5` | **Smooth mode only.** `0` = off (raw noise), `1` = low, `2` = medium, `3` = high, `4` = very high, `5` = maximum |
-| `Timestep` | `3` | **Step mode only.** Seconds each sensitivity value is held before the next jump |
-| `Runtime` | `0` | Session length in minutes. `0` = run indefinitely |
-| `X_Sensitivity` | `1` | Constant horizontal axis multiplier (applied on top of the randomizer) |
-| `Y_Sensitivity` | `1` | Constant vertical axis multiplier (applied on top of the randomizer) |
+| `Baseline_Sensitivity` | `1` | Center of the randomization range |
+| `Min_Sensitivity` | `0.5` | Lower bound multiplier |
+| `Max_Sensitivity` | `2` | Upper bound multiplier |
+| `Spread` | `0.1` | Lognormal variance — how far sensitivity wanders from baseline |
+| `Smooth` | `1` | `1` = smooth mode, `0` = step mode |
+| `Smoothing` | `5` | Smooth mode only. `0` = raw noise, `5` = maximum smoothing |
+| `Timestep` | `3` | Step mode only. Seconds each value is held |
 
-### Tips
+### X/Y Decoupling
 
-- **Baseline should almost always be 1** — you're multiplying around your existing in-game sensitivity, not replacing it.
-- **Spread** is counterintuitive: very high values don't always produce wilder swings. Because the Gaussian smoothing actively fights noise, too much spread can actually flatten the curve. The original authors recommended starting around **0.6** and *decreasing* toward 0.1 if you want less variation, not increasing it.
-- **Smoothing 0** in smooth mode is a fun experiment — it produces raw, jagged noise rather than a flowing curve.
-- **X/Y decoupling** is a constant multiplier applied regardless of whether the randomizer is running. Useful for aspect ratio corrections (e.g. 16:9 → 4:3 ≈ Y × 0.5625).
+Applies a constant independent multiplier to each axis. Useful for:
+- Correcting aspect ratio mismatches (e.g. 16:9 → 4:3: Y × 0.5625)
+- Matching horizontal/vertical feel across different games
+- Fine-tuning vertical sensitivity independently of horizontal
+
+| Setting | Default | Description |
+|---|---|---|
+| `X_Sensitivity` | `1` | Horizontal axis multiplier |
+| `Y_Sensitivity` | `1` | Vertical axis multiplier |
+
+### Acceleration Curve
+
+Maps raw mouse speed (mm/s) to a sensitivity multiplier using a custom curve you draw in the editor. The curve is pre-computed into a 512-entry lookup table and applied on the hot path with a single array lookup — no runtime math.
+
+**Editor features:**
+- Smooth (Hermite spline), corner (linear), and jump (step) point types — double-click to cycle
+- Multi-curve mode: independent X and Y curves
+- Scroll to zoom, middle-drag to pan, Shift to snap to grid
+- Hover the axis label strips to scale only that axis
+- Live dot and trail shows where your current mouse speed falls on the curve in real-time
+- DPI-aware X-axis — set your mouse DPI in Settings to display speed in mm/s
+
+| Setting | Default | Description |
+|---|---|---|
+| `Mouse_DPI` | `800` | Your mouse DPI, used for mm/s display in the curve editor |
+
+---
+
+## Settings
+
+All settings are managed through the UI and written to `settings.ini`. You can also edit the file directly — the app reads it on each start.
+
+### Global hotkeys
+
+Configurable system-wide shortcuts — set them in **Settings → Global Hotkeys**.
+
+| Setting | Description |
+|---|---|
+| `Hotkey_StartStop` | Toggle the app on/off from anywhere |
+| `Hotkey_Pause` | Pause/resume the randomizer |
 
 ---
 
 ## Usage
 
-- **Start / Stop** from the Randomizer tab or the tray right-click menu.
-- **Pause / Resume** — press **P** in the console window while the randomizer is running.
-- **Close** hides to tray. Right-click the tray icon → **Quit** to exit fully.
+- **Start / Stop** from the Dashboard or the tray right-click menu.
+- **Pause / Resume** — use the configured hotkey, or press **P** in the console window.
+- **Close** hides to tray. Right-click tray icon → **Quit** to exit fully.
+- Each module has its own enable toggle — disabling a module is a pass-through for that transform.
 
 ---
 
@@ -90,15 +122,14 @@ All settings are managed through the UI and saved to `settings.ini`. You can als
 
 The Interception driver requires:
 - Secure Boot **disabled** in BIOS/UEFI
-- A **reboot** after install or uninstall before the change takes effect
+- A **reboot** after install before the driver is active
+- A **reboot** after uninstall before the driver files are fully removed
 - Admin privileges only for install/uninstall — normal use requires no elevation
+
+When the app is stopped, the Interception driver is a transparent pass-through — your mouse behaves completely normally.
 
 ---
 
 ## Credits
 
-Original tool by **Whisper** and **El Bad**:
-- GitHub: [Whisperrr/SensitivityRandomizer](https://github.com/Whisperrr/SensitivityRandomizer)
-- Reddit write-up: [r/FPSAimTrainer](https://www.reddit.com/r/FPSAimTrainer/comments/cve6oi/tool_for_smoothly_randomizing_sensitivity/)
-
-This fork is maintained separately and is not affiliated with the original authors.
+The sensitivity randomizer engine originated from [Whisper & El Bad](https://github.com/Whisperrr/SensitivityRandomizer). This project has since grown into a standalone mouse customization tool and is maintained independently.
