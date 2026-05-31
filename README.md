@@ -2,13 +2,14 @@
 
 A Windows desktop tool for real-time mouse customization, built for aim trainers and competitive gaming. Intercepts raw mouse input at the kernel level via the [Interception](http://www.oblita.com/interception.html) driver and applies modifications before they reach any game or application.
 
-Three independent modules — run any combination, or none (pass-through):
+Four independent modules — run any combination, or none (pass-through):
 
 | Module | What it does |
 |---|---|
 | **Sensitivity** | Applies unified or independent horizontal and vertical multipliers |
 | **Sensitivity Randomizer** | Randomizes your sensitivity on a configurable curve during practice sessions |
 | **Acceleration Curve** | Maps axial mouse speed (mm/s) to sensitivity multipliers via custom curves |
+| **Angle Correction** | Rotates raw input to compensate for physical mouse grip tilt |
 
 ---
 
@@ -86,6 +87,19 @@ Maps raw mouse speed (mm/s) to a sensitivity multiplier using custom curves. Fea
 - **Professional Visualizer**: High-fidelity live dots with trails, crosshairs, and axis labels show your exact speed and multiplier in real-time (30Hz).
 - **Point Types**: Smooth (Hermite spline), corner (linear), and jump (step) — double-click to cycle.
 - **Interaction**: Scroll to zoom, middle-drag to pan, Shift to snap to grid.
+
+### Angle Correction
+
+Compensates for physical mouse grip tilt. If you hold your mouse at an angle, straight physical movements become diagonal on screen — this rotates the raw input back to align with your hand.
+
+- **Interactive dial** — drag to set rotation visually, or type an exact value
+- Range: **-180° to +180°**
+- Applied first in the pipeline, before sensitivity and acceleration
+
+| Setting | Default | Description |
+|---|---|---|
+| `Angle_Enabled` | `0` | `1` = rotation active |
+| `Angle_Value` | `0` | Degrees of rotation (-180 to 180) |
 
 ---
 
