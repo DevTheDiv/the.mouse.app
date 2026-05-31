@@ -9,11 +9,13 @@ import {
   CropSquare as MaximizeIcon,
   Mouse,
   SwapVert,
+  ShowChart,
 } from '@mui/icons-material';
 import Dashboard     from './pages/Dashboard';
 import SensRandomizer from './pages/SensRandomizer';
-import XYDecoupling  from './pages/XYDecoupling';
+import Sensitivity    from './pages/Sensitivity';
 import Settings      from './pages/Settings';
+import AccelCurve    from './pages/AccelCurve';
 import { SettingsProvider } from './context/SettingsContext';
 import FloatingActionBar from './components/FloatingActionBar';
 
@@ -54,10 +56,11 @@ function TitleBar() {
 }
 
 const NAV = [
-  { path: '/',              label: 'Dashboard', Icon: DashboardIcon },
-  { path: '/sens',          label: 'Randomizer', Icon: Mouse        },
-  { path: '/xy',            label: 'X/Y',        Icon: SwapVert     },
-  { path: '/settings',      label: 'Settings',   Icon: SettingsIcon },
+  { path: '/',            label: 'Dashboard',  Icon: DashboardIcon },
+  { path: '/sensitivity', label: 'Sensitivity', Icon: SwapVert      },
+  { path: '/randomizer',  label: 'Randomizer',  Icon: Mouse         },
+  { path: '/accel',       label: 'Accel',      Icon: ShowChart     },
+  { path: '/settings',    label: 'Settings',   Icon: SettingsIcon  },
 ];
 
 function Sidebar() {
@@ -100,10 +103,11 @@ export default function App() {
             <Sidebar />
             <Box sx={{ flex: 1, overflow: 'auto' }}>
               <Routes>
-                <Route path="/"         element={<Dashboard />}      />
-                <Route path="/sens"     element={<SensRandomizer />} />
-                <Route path="/xy"       element={<XYDecoupling />}   />
-                <Route path="/settings" element={<Settings />}       />
+                <Route path="/"            element={<Dashboard />}      />
+                <Route path="/sensitivity" element={<Sensitivity />}    />
+                <Route path="/randomizer"  element={<SensRandomizer />} />
+                <Route path="/accel"       element={<AccelCurve />}     />
+                <Route path="/settings"    element={<Settings />}       />
               </Routes>
             </Box>
           </Box>

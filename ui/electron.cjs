@@ -25,7 +25,10 @@ const INSTALLER_EXE = path.join(APP_DIR, 'install-interception.exe');
 // and are always writable regardless of install location.
 function getSettingsPath() {
   if (isDev) return path.join(APP_DIR, 'settings.ini');
-  const dest = path.join(app.getPath('userData'), 'settings.ini');
+  const destDir = app.getPath('userData');
+  if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true });
+  
+  const dest = path.join(destDir, 'settings.ini');
   if (!fs.existsSync(dest)) {
     const src = path.join(APP_DIR, 'settings.ini');
     if (fs.existsSync(src)) fs.copyFileSync(src, dest);
@@ -75,23 +78,118 @@ function makePNG(size, r, g, b) {
   return Buffer.concat([sig, pngChunk('IHDR', ihdr), pngChunk('IDAT', idat), pngChunk('IEND', Buffer.alloc(0))]);
 }
 
+/* ── accel curve helpers ───────────────────────────────────────── */
+function getAccelCurvePath() {
+  return path.join(path.dirname(getSettingsPath()), 'accel_curve.json');
+}
+
+function getAccelLutPath() {
+  return path.join(path.dirname(getSettingsPath()), 'accel_lut.bin');
+}
+
+function writeAccelLut(enabled, multiCurve, maxSpeed, lutX, lutY) {
+  const isMulti = multiCurve ? 1 : 0;
+  const flag = (enabled ? 1 : 0) | (isMulti ? 2 : 0);
+  const count = lutX.length;
+  const size = isMulti ? 12 + (count * 2) * 4 : 12 + count * 4;
+  const buf = Buffer.alloc(size);
+  buf.writeUInt32LE(flag, 0);
+  buf.writeFloatLE(maxSpeed, 4);
+  buf.writeUInt32LE(count, 8);
+  for (let i = 0; i < count; i++) buf.writeFloatLE(lutX[i], 12 + i * 4);
+  if (isMulti && lutY) {
+    for (let i = 0; i < count; i++) buf.writeFloatLE(lutY[i], 12 + count * 4 + i * 4);
+  }
+  fs.writeFileSync(getAccelLutPath(), buf);
+}
+
 /* ── settings.ini helpers ──────────────────────────────────────── */
 function readSettings() {
-  const text = fs.readFileSync(getSettingsPath(), 'utf8');
-  const out  = {};
-  for (const line of text.split(/\r?\n/)) {
-    const t  = line.trim();
-    if (!t || t.startsWith(';') || t.startsWith('#')) continue;
-    const eq = t.indexOf('=');
-    if (eq === -1) continue;
-    out[t.slice(0, eq).trim()] = t.slice(eq + 1).trim();
+  const p = getSettingsPath();
+  try {
+    const text = fs.readFileSync(p, 'utf8');
+    const out  = {};
+    for (const line of text.split(/\r?\n/)) {
+      const t  = line.trim();
+      if (!t || t.startsWith(';') || t.startsWith('#')) continue;
+      const eq = t.indexOf('=');
+      if (eq !== -1) out[t.slice(0, eq).trim()] = t.slice(eq + 1).trim();
+    }
+    // If we got nothing but expected something, the file might be corrupted
+    if (Object.keys(out).length === 0 && !isDev) {
+      throw new Error('Empty settings');
+    }
+    return out;
+  } catch (e) {
+    console.error(`Failed to read settings at ${p}, attempting recovery...`, e);
+    // Recovery: Try to copy from template again if not in dev
+    if (!isDev) {
+      const src = path.join(APP_DIR, 'settings.ini');
+      if (fs.existsSync(src)) {
+        try {
+          fs.copyFileSync(src, p);
+          // Simple manual parse of the freshly copied file to avoid infinite recursion
+          const text = fs.readFileSync(p, 'utf8');
+          const out = {};
+          for (const line of text.split(/\r?\n/)) {
+            const t = line.trim();
+            if (!t || t.startsWith(';') || t.startsWith('#')) continue;
+            const eq = t.indexOf('=');
+            if (eq !== -1) out[t.slice(0, eq).trim()] = t.slice(eq + 1).trim();
+          }
+          return out;
+        } catch (e2) { console.error('Recovery failed', e2); }
+      }
+    }
+    return {};
   }
-  return out;
 }
 
 function writeSettings(settings) {
-  const text = Object.entries(settings).map(([k, v]) => `${k} = ${v}`).join('\r\n');
-  fs.writeFileSync(getSettingsPath(), text, 'utf8');
+  try {
+    const text = Object.entries(settings).map(([k, v]) => `${k} = ${v}`).join('\r\n');
+    fs.writeFileSync(getSettingsPath(), text, 'utf8');
+  } catch (e) { console.error('Failed to write settings', e); }
+}
+
+function migrateSettings() {
+  const dest = path.join(app.getPath('userData'), 'settings.ini');
+  const src  = path.join(APP_DIR, 'settings.ini');
+  
+  if (isDev || !fs.existsSync(dest) || !fs.existsSync(src)) return;
+
+  try {
+    const parse = (p) => {
+      const text = fs.readFileSync(p, 'utf8');
+      const obj = {};
+      for (const line of text.split(/\r?\n/)) {
+        const t = line.trim();
+        if (!t || t.startsWith(';') || t.startsWith('#')) continue;
+        const eq = t.indexOf('=');
+        if (eq !== -1) obj[t.slice(0, eq).trim()] = t.slice(eq + 1).trim();
+      }
+      return obj;
+    };
+
+    const userSettings = parse(dest);
+    const templateSettings = parse(src);
+    let changed = false;
+
+    // Add any missing keys from template to user settings
+    for (const [k, v] of Object.entries(templateSettings)) {
+      if (!(k in userSettings)) {
+        userSettings[k] = v;
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      writeSettings(userSettings);
+      console.log('Settings migrated with new defaults.');
+    }
+  } catch (e) {
+    console.error('Migration failed', e);
+  }
 }
 
 /* ── driver status ─────────────────────────────────────────────── */
@@ -161,6 +259,13 @@ function startApp() {
     return;
   }
 
+  // Persist state
+  try {
+    const s = readSettings();
+    s.Running = '1';
+    writeSettings(s);
+  } catch (e) { console.error('Failed to save running state', e); }
+
   // Kill any zombie instances first
   try {
     execSync('taskkill /F /IM themouseapp.exe /T', { stdio: 'ignore' });
@@ -178,13 +283,16 @@ function startApp() {
       if (line.startsWith('LIVE:')) {
         const parts = line.split(':');
         if (parts.length >= 4) {
-          const x = parseFloat(parts[1]);
-          const y = parseFloat(parts[2]);
-          const bits = parseInt(parts[3]);
+          const x      = parseFloat(parts[1]);
+          const y      = parseFloat(parts[2]);
+          const bits   = parseInt(parts[3]);
+          const speedX = parts.length >= 5 ? parseFloat(parts[4]) : 0;
+          const speedY = parts.length >= 6 ? parseFloat(parts[5]) : speedX;
           const p   = (bits & 1) === 1;
           const re  = (bits & 2) === 2;
           const xye = (bits & 4) === 4;
-          mainWindow?.webContents.send('live-sens', { x, y, paused: p, randomizerEnabled: re, xyEnabled: xye });
+          const ae  = (bits & 8) === 8;
+          mainWindow?.webContents.send('live-sens', { x, y, paused: p, randomizerEnabled: re, xyEnabled: xye, accelEnabled: ae, speedX, speedY });
         }
       }
     }
@@ -206,6 +314,14 @@ function startApp() {
 
 function stopApp() {
   if (!childProcess) return;
+
+  // Persist state
+  try {
+    const s = readSettings();
+    s.Running = '0';
+    writeSettings(s);
+  } catch (e) { console.error('Failed to save stopped state', e); }
+
   childProcess.kill();
   childProcess = null; processStatus = 'stopped'; startTime = null;
   mainWindow?.webContents.send('process-status', { status: 'stopped' });
@@ -257,6 +373,10 @@ function createWindow() {
       nodeIntegration: false,
     },
   });
+
+  // Prevent Electron from zooming the window on Ctrl+Scroll so the
+  // gesture reaches our SVG wheel handler inside the renderer.
+  mainWindow.webContents.setVisualZoomLevelLimits(1, 1);
 
   if (isDev) {
     mainWindow.loadURL('http://localhost:5173');
@@ -331,9 +451,85 @@ function setupIPC() {
 
   ipcMain.handle('get-driver-status', () => getDriverStatus());
 
+  ipcMain.handle('get-accel-curve', () => {
+    const p = getAccelCurvePath();
+    if (!fs.existsSync(p)) return null;
+    try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch { return null; }
+  });
+
+  ipcMain.handle('save-accel-curve', (_, curve) => {
+    fs.writeFileSync(getAccelCurvePath(), JSON.stringify(curve, null, 2), 'utf8');
+    writeAccelLut(curve.enabled, curve.multiCurve, curve.maxSpeed, curve.lutX, curve.lutY);
+    return true;
+  });
+
   ipcMain.handle('set-autostart', (_, enable) => {
     app.setLoginItemSettings({ openAtLogin: enable });
     return app.getLoginItemSettings().openAtLogin;
+  });
+
+  ipcMain.handle('get-windows-accel', () => {
+    try {
+      const out = execSync('powershell -Command "(Get-ItemProperty \'HKCU:\\Control Panel\\Mouse\').MouseSpeed"').toString().trim();
+      return out !== '0';
+    } catch { return false; }
+  });
+
+  ipcMain.handle('set-windows-accel', (_, enabled) => {
+    const speed = enabled ? 1 : 0;
+    const t1    = enabled ? 6 : 0;
+    const t2    = enabled ? 10 : 0;
+    const psCommand = `
+      Add-Type -TypeDefinition '
+      using System;
+      using System.Runtime.InteropServices;
+      namespace Win32 {
+          public class WinApi {
+              [DllImport("user32.dll")]
+              public static extern bool SystemParametersInfo(uint uiAction, uint uiParam, IntPtr pvParam, uint fWinIni);
+          }
+      }';
+      Set-ItemProperty 'HKCU:\\Control Panel\\Mouse' -Name 'MouseSpeed' -Value ${speed};
+      Set-ItemProperty 'HKCU:\\Control Panel\\Mouse' -Name 'MouseThreshold1' -Value ${t1};
+      Set-ItemProperty 'HKCU:\\Control Panel\\Mouse' -Name 'MouseThreshold2' -Value ${t2};
+      $mouseParams = [int[]](${t1}, ${t2}, ${speed});
+      $ptr = [System.Runtime.InteropServices.Marshal]::AllocHGlobal(12);
+      [System.Runtime.InteropServices.Marshal]::Copy($mouseParams, 0, $ptr, 3);
+      [Win32.WinApi]::SystemParametersInfo(0x0004, 0, $ptr, 0x03);
+      [System.Runtime.InteropServices.Marshal]::FreeHGlobal($ptr);
+    `.replace(/\n/g, ' ').trim();
+    
+    try {
+      execSync(`powershell -Command "${psCommand}"`);
+      return true;
+    } catch { return false; }
+  });
+
+  ipcMain.handle('get-windows-mouse-speed', () => {
+    try {
+      const out = execSync('powershell -Command "(Get-ItemProperty \'HKCU:\\Control Panel\\Mouse\').MouseSensitivity"').toString().trim();
+      return parseInt(out) || 10;
+    } catch { return 10; }
+  });
+
+  ipcMain.handle('set-windows-mouse-speed', (_, val) => {
+    const psCommand = `
+      Add-Type -TypeDefinition '
+      using System;
+      using System.Runtime.InteropServices;
+      namespace Win32 {
+          public class WinApi {
+              [DllImport("user32.dll")]
+              public static extern bool SystemParametersInfo(uint uiAction, uint uiParam, IntPtr pvParam, uint fWinIni);
+          }
+      }';
+      [Win32.WinApi]::SystemParametersInfo(0x0071, 0, [IntPtr]${val}, 0x03);
+    `.replace(/\n/g, ' ').trim();
+    
+    try {
+      execSync(`powershell -Command "${psCommand}"`);
+      return true;
+    } catch { return false; }
   });
 
   ipcMain.on('window-minimize', () => mainWindow.minimize());
@@ -347,14 +543,15 @@ function refreshShortcuts() {
   globalShortcut.unregisterAll();
   const settings = readSettings();
   
-  if (settings.Hotkey_StartStop) {
-    try {
-      globalShortcut.register(settings.Hotkey_StartStop, () => {
-        if (processStatus === 'running') stopApp();
-        else startApp();
-      });
-    } catch (e) { console.error('Failed to register StartStop shortcut', e); }
-  }
+  const startStopKey = settings.Hotkey_StartStop || 'CommandOrControl+F12';
+  
+  try {
+    const ok = globalShortcut.register(startStopKey, () => {
+      if (processStatus === 'running') stopApp();
+      else startApp();
+    });
+    if (!ok) console.error(`Failed to register StartStop shortcut: ${startStopKey} (shortcut might be in use)`);
+  } catch (e) { console.error('Error registering StartStop shortcut', e); }
 
   if (settings.Hotkey_Pause) {
     try {
@@ -377,9 +574,18 @@ app.whenReady().then(async () => {
   }
 
   setupIPC();
+  migrateSettings();
   createWindow();
   await createTray();
   refreshShortcuts();
+
+  // Auto-start engine if it was running last session
+  try {
+    const s = readSettings();
+    if (s.Running === '1') {
+      startApp();
+    }
+  } catch (e) { /* ignore startup auto-start errors */ }
 });
 
 app.on('window-all-closed', (e) => e.preventDefault()); // keep alive in tray

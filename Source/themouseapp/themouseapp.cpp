@@ -16,6 +16,8 @@
 #include <atomic>
 #include <deque>
 #include <algorithm>
+#include <cstdint>
+#include <cstdio>
 
 #pragma warning(disable : 4996)
 
@@ -32,6 +34,15 @@ double TIMESTEP_MEAN = 0.2, TIMESTEP_STDDEV = 0.1;
 double GAUSSIAN_STDDEV = 1000.0, GAUSSIAN_WINDOW_SIZE = 5000.0;
 bool   DEBUG = false, TYPE = true;
 bool   RANDOMIZER_ENABLED = false, XY_ENABLED = false;
+
+// ---- Accel LUT (globals) ----
+static const int ACCEL_LUT_SIZE = 512;
+double ACCEL_LUT_X[ACCEL_LUT_SIZE];
+double ACCEL_LUT_Y[ACCEL_LUT_SIZE];
+double ACCEL_MAX_SPEED = 1500.0; // mm/s
+bool   ACCEL_ENABLED   = false;
+bool   ACCEL_MULTI     = false;
+double MOUSE_DPI       = 800.0;
 
 COORD  coord;
 HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
@@ -142,6 +153,7 @@ bool readSettings(const string& path)
             else if (name == "Y_Sensitivity")        Y_RATIO            = val;
             else if (name == "Randomizer_Enabled")   RANDOMIZER_ENABLED = (bool)val;
             else if (name == "XY_Enabled")           XY_ENABLED         = (bool)val;
+            else if (name == "Mouse_DPI")            MOUSE_DPI          = val > 0 ? val : 800;
             else {
                 if (DEBUG) printf("Unknown setting: %s\n", name.c_str());
                 garbage = true;
@@ -312,6 +324,70 @@ void generatorThread(double start_sens, unsigned seed)
 }
 
 
+// ---- Read accel LUT binary ----
+// Format: uint32 flag (bit0:enabled, bit1:multi) | float32 maxSpeed | uint32 count | float32[count] lutX [ | float32[count] lutY ]
+void readAccelLut(const string& path)
+{
+    for (int i = 0; i < ACCEL_LUT_SIZE; i++) {
+        ACCEL_LUT_X[i] = 1.0;
+        ACCEL_LUT_Y[i] = 1.0;
+    }
+
+    FILE* f = fopen(path.c_str(), "rb");
+    if (!f) {
+        printf("No accel LUT found (%s), acceleration disabled.\n", path.c_str());
+        ACCEL_ENABLED = false;
+        ACCEL_MULTI   = false;
+        return;
+    }
+
+    uint32_t flag = 0, lut_count = 0;
+    float    max_speed_f  = 50.0f;
+    bool ok = fread(&flag, 4, 1, f) == 1
+           && fread(&max_speed_f,  4, 1, f) == 1
+           && fread(&lut_count,    4, 1, f) == 1;
+
+    if (!ok) { fclose(f); ACCEL_ENABLED = false; ACCEL_MULTI = false; return; }
+
+    ACCEL_ENABLED   = (flag & 1) != 0;
+    ACCEL_MULTI     = (flag & 2) != 0;
+    ACCEL_MAX_SPEED = (double)max_speed_f;
+
+    uint32_t n = min(lut_count, (uint32_t)ACCEL_LUT_SIZE);
+    
+    // Read X LUT
+    vector<float> tmpX(n);
+    if (fread(tmpX.data(), 4, n, f) == n) {
+        for (uint32_t i = 0; i < n; i++) ACCEL_LUT_X[i] = (double)tmpX[i];
+    }
+    // Pad X
+    for (uint32_t i = n; i < (uint32_t)ACCEL_LUT_SIZE; i++)
+        ACCEL_LUT_X[i] = n > 0 ? ACCEL_LUT_X[n - 1] : 1.0;
+
+    if (ACCEL_MULTI) {
+        // Read Y LUT
+        vector<float> tmpY(n);
+        if (fread(tmpY.data(), 4, n, f) == n) {
+            for (uint32_t i = 0; i < n; i++) ACCEL_LUT_Y[i] = (double)tmpY[i];
+        }
+        // Pad Y
+        for (uint32_t i = n; i < (uint32_t)ACCEL_LUT_SIZE; i++)
+            ACCEL_LUT_Y[i] = n > 0 ? ACCEL_LUT_Y[n - 1] : 1.0;
+    } else {
+        // Copy X to Y
+        for (uint32_t i = 0; i < ACCEL_LUT_SIZE; i++)
+            ACCEL_LUT_Y[i] = ACCEL_LUT_X[i];
+    }
+
+    fclose(f);
+
+    if (ACCEL_ENABLED)
+        printf("Accel curve loaded: max %.1f mm/s, %u entries, multi=%d\n",
+               ACCEL_MAX_SPEED, n, ACCEL_MULTI);
+    else
+        printf("Accel curve loaded but disabled.\n");
+}
+
 // ---- Main ----
 int main(int argc, char* argv[])
 {
@@ -324,6 +400,15 @@ int main(int argc, char* argv[])
         settingsPath = argv[1];
     }
 
+    // Derive accel LUT path from settings directory
+    string lutPath;
+    {
+        size_t slash = settingsPath.find_last_of("/\\");
+        lutPath = (slash != string::npos)
+                ? settingsPath.substr(0, slash + 1) + "accel_lut.bin"
+                : "accel_lut.bin";
+    }
+
     DWORD prev_mode;
     GetConsoleMode(hConsole, &prev_mode);
     SetConsoleMode(hConsole, prev_mode & ~ENABLE_QUICK_EDIT_MODE);
@@ -334,6 +419,7 @@ int main(int argc, char* argv[])
     // --- Setup and read settings BEFORE touching the interception filter ---
     setUp();
     bool garbage = readSettings(settingsPath);
+    readAccelLut(lutPath);
 
     // Print settings
     {
@@ -342,10 +428,12 @@ int main(int argc, char* argv[])
         SetConsoleTextAttribute(hConsole, 0x02);
         printf("Type: %s\nBase Sensitivity: %.2f\nMin: %.2f\nMax: %.2f\n"
                "Spread: %.2f\nSmoothing: %d\nTimestep: %.1f s\nDebug: %d\n"
-               "Randomizer Enabled: %d\nXY Enabled: %d\nX Sensitivity: %.2f\nY Sensitivity: %.2f\n\n",
+               "Randomizer Enabled: %d\nXY Enabled: %d\nX Sensitivity: %.2f\nY Sensitivity: %.2f\n"
+               "Accel Enabled: %d\nAccel Multi: %d\nAccel Max Speed: %.0f mm/s\nMouse DPI: %.0f\n\n",
                type_str, SENS_MEAN, MIN_SENS, MAX_SENS,
                SENS_SPREAD, SMOOTH_AMT, TIMESTEP_MEAN, DEBUG,
-               RANDOMIZER_ENABLED, XY_ENABLED, X_RATIO, Y_RATIO);
+               RANDOMIZER_ENABLED, XY_ENABLED, X_RATIO, Y_RATIO,
+               ACCEL_ENABLED, ACCEL_MULTI, ACCEL_MAX_SPEED, MOUSE_DPI);
         SetConsoleTextAttribute(hConsole, 0x08);
 
         if (garbage) {
@@ -406,8 +494,9 @@ int main(int argc, char* argv[])
     typedef chrono::high_resolution_clock Clock;
     typedef chrono::duration<double>      DSec;
 
-    auto   prog_start = Clock::now();
-    auto   last_live  = Clock::now();
+    auto   prog_start      = Clock::now();
+    auto   last_live       = Clock::now();
+    auto   last_event_time = Clock::now();
     double carryX = 0, carryY = 0;
     double sens_mult = RANDOMIZER_ENABLED ? SENS_MEAN : 1.0;
     ULONGLONG lastpress = 0;
@@ -448,6 +537,10 @@ int main(int argc, char* argv[])
             if (!(ms.flags & INTERCEPTION_MOUSE_MOVE_ABSOLUTE))
             {
                 auto now = Clock::now();
+                double dt_ms = DSec(now - last_event_time).count() * 1000.0;
+                last_event_time = now;
+                if (dt_ms < 0.01)  dt_ms = 0.01;
+                if (dt_ms > 100.0) dt_ms = 100.0; // treat idle gaps as low speed
                 double t_abs = DSec(now - prog_start).count();
                 bool paused = g_paused.load();
 
@@ -520,11 +613,28 @@ int main(int argc, char* argv[])
                     base_mult = 1.0;
                 }
 
-                // 2. Apply XY Ratios
-                double live_x = base_mult * (XY_ENABLED ? X_RATIO : 1.0);
-                double live_y = base_mult * (XY_ENABLED ? Y_RATIO : 1.0);
+                // 2. Accel curve lookup: speed in mm/s = counts/ms * 25400 / DPI
+                double speed_x = abs((double)ms.x) * 25400.0 / (dt_ms * MOUSE_DPI);
+                double speed_y = abs((double)ms.y) * 25400.0 / (dt_ms * MOUSE_DPI);
+                double accel_mult_x = 1.0, accel_mult_y = 1.0;
 
-                // 3. Transform mouse stroke
+                if (ACCEL_ENABLED) {
+                    int idx_x = (int)(speed_x / ACCEL_MAX_SPEED * ACCEL_LUT_SIZE);
+                    if (idx_x < 0) idx_x = 0;
+                    if (idx_x >= ACCEL_LUT_SIZE) idx_x = ACCEL_LUT_SIZE - 1;
+                    accel_mult_x = ACCEL_LUT_X[idx_x];
+
+                    int idx_y = (int)(speed_y / ACCEL_MAX_SPEED * ACCEL_LUT_SIZE);
+                    if (idx_y < 0) idx_y = 0;
+                    if (idx_y >= ACCEL_LUT_SIZE) idx_y = ACCEL_LUT_SIZE - 1;
+                    accel_mult_y = ACCEL_LUT_Y[idx_y];
+                }
+
+                // 3. Apply XY Ratios + accel
+                double live_x = base_mult * accel_mult_x * (XY_ENABLED ? X_RATIO : 1.0);
+                double live_y = base_mult * accel_mult_y * (XY_ENABLED ? Y_RATIO : 1.0);
+
+                // 4. Transform mouse stroke
                 double dx = ms.x * live_x + carryX;
                 double dy = ms.y * live_y + carryY;
                 carryX = dx - floor(dx);
@@ -532,15 +642,16 @@ int main(int argc, char* argv[])
                 ms.x   = (int)floor(dx);
                 ms.y   = (int)floor(dy);
 
-                // 4. Periodic live output for UI
-                if (DSec(now - last_live).count() > 0.05) { // 20 Hz
+                // 5. Periodic live output for UI
+                if (DSec(now - last_live).count() > 0.033) { // ~30 Hz
                     last_live = now;
-                    // Status bitmask: 1=Paused, 2=RandomizerEnabled, 4=XYEnabled
+                    // Status bitmask: 1=Paused, 2=RandomizerEnabled, 4=XYEnabled, 8=AccelEnabled
                     int status_bits = 0;
-                    if (paused) status_bits |= 1;
+                    if (paused)             status_bits |= 1;
                     if (RANDOMIZER_ENABLED) status_bits |= 2;
-                    if (XY_ENABLED) status_bits |= 4;
-                    printf("LIVE:%.4f:%.4f:%d\n", live_x, live_y, status_bits);
+                    if (XY_ENABLED)         status_bits |= 4;
+                    if (ACCEL_ENABLED)      status_bits |= 8;
+                    printf("LIVE:%.4f:%.4f:%d:%.1f:%.1f\n", live_x, live_y, status_bits, speed_x, speed_y);
                     fflush(stdout);
                 }
             }

@@ -28,8 +28,9 @@ export function SettingsProvider({ children }) {
         XY_Enabled:           raw.XY_Enabled          !== '0',
         X_Sensitivity:        parseFloat(raw.X_Sensitivity)        || 1,
         Y_Sensitivity:        parseFloat(raw.Y_Sensitivity)        || 1,
-        Hotkey_StartStop:     raw.Hotkey_StartStop                 || '',
+        Hotkey_StartStop:     raw.Hotkey_StartStop                 || 'CommandOrControl+F12',
         Hotkey_Pause:         raw.Hotkey_Pause                     || '',
+        Mouse_DPI:            parseInt(raw.Mouse_DPI)              || 800,
       };
       setSettings(normalized);
       setOriginalSettings(JSON.stringify(normalized));
@@ -72,6 +73,7 @@ export function SettingsProvider({ children }) {
         Y_Sensitivity:        String(settings.Y_Sensitivity),
         Hotkey_StartStop:     settings.Hotkey_StartStop,
         Hotkey_Pause:         settings.Hotkey_Pause,
+        Mouse_DPI:            String(settings.Mouse_DPI),
       };
       await window.api.saveSettings(toSave);
       await window.api.restartAppIfRunning();

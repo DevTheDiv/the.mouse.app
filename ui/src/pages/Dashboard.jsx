@@ -7,22 +7,24 @@ import { PlayArrow, Stop } from '@mui/icons-material';
 export default function Dashboard() {
   const [status,       setStatus]       = useState('stopped');
   const [driverStatus, setDriverStatus] = useState('not_installed');
-  const [tools,        setTools]        = useState({ randomizer: true, xy: true });
+  const [tools,        setTools]        = useState({ randomizer: true, xy: true, accel: false });
   const [error,        setError]        = useState(null);
   const [loading,      setLoading]      = useState(false);
-  const [liveSens,     setLiveSens]     = useState({ x: 1.0, y: 1.0, paused: false, randomizerEnabled: false, xyEnabled: false });
+  const [liveSens,     setLiveSens]     = useState({ x: 1.0, y: 1.0, paused: false, randomizerEnabled: false, xyEnabled: false, accelEnabled: false });
 
   const isRunning = status === 'running';
 
   const load = useCallback(async () => {
     try {
-      const [st, raw] = await Promise.all([window.api.getStatus(), window.api.getSettings()]);
+      const [st, raw, accel] = await Promise.all([
+        window.api.getStatus(), window.api.getSettings(), window.api.getAccelCurve(),
+      ]);
       setStatus(st.processStatus);
       setDriverStatus(st.driverStatus);
-      // Fallback for tools display before first live update
       setTools({
         randomizer: raw.Randomizer_Enabled === '1' || (raw.Randomizer_Enabled === undefined),
-        xy:         raw.XY_Enabled         === '1',
+        xy:         raw.XY_Enabled === '1',
+        accel:      accel?.enabled ?? false,
       });
     } catch (e) { setError(e.message); }
   }, []);
@@ -33,7 +35,7 @@ export default function Dashboard() {
     const offError  = window.api.onAppError((msg) => setError(msg));
     const offLive   = window.api.onLiveSens((d) => {
       setLiveSens(d);
-      setTools({ randomizer: d.randomizerEnabled, xy: d.xyEnabled });
+      setTools({ randomizer: d.randomizerEnabled, xy: d.xyEnabled, accel: d.accelEnabled });
     });
     return () => { offStatus?.(); offError?.(); offLive?.(); };
   }, [load]);
@@ -77,13 +79,7 @@ export default function Dashboard() {
 
         <Typography variant="h5" color={isRunning ? (liveSens.paused ? 'warning.main' : 'success.main') : 'text.secondary'}
           sx={{ mb: 5, fontWeight: 600, transition: 'color 0.3s', textTransform: 'uppercase', letterSpacing: 2 }}>
-          {isRunning 
-            ? (liveSens.paused 
-               ? 'Paused' 
-               : (liveSens.randomizerEnabled 
-                  ? 'Randomizing' 
-                  : (liveSens.xyEnabled ? 'X/Y Active' : 'Bypass'))) 
-            : 'Inactive'}
+          {isRunning ? 'Active' : 'Inactive'}
         </Typography>
 
         {isRunning && (
@@ -173,11 +169,14 @@ export default function Dashboard() {
             variant={tools.xy ? 'filled' : 'outlined'}
             color={tools.xy ? 'primary' : 'default'}
             label="X/Y Decoupling"
-            sx={{ 
-              fontSize: '0.7rem', height: 24, px: 1,
-              opacity: tools.xy ? 1 : 0.4,
-              fontWeight: 600
-            }}
+            sx={{ fontSize: '0.7rem', height: 24, px: 1, opacity: tools.xy ? 1 : 0.4, fontWeight: 600 }}
+          />
+          <Chip
+            size="small"
+            variant={tools.accel ? 'filled' : 'outlined'}
+            color={tools.accel ? 'primary' : 'default'}
+            label="Accel Curve"
+            sx={{ fontSize: '0.7rem', height: 24, px: 1, opacity: tools.accel ? 1 : 0.4, fontWeight: 600 }}
           />
         </Box>
       </Box>

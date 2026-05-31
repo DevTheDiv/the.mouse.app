@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   Box, Typography, Paper, Switch, FormControlLabel,
   Button, Alert, Snackbar, CircularProgress,
-  Chip, IconButton, Tooltip,
+  Chip, IconButton, Tooltip, TextField, Slider,
 } from '@mui/material';
 import {
   Download, DeleteOutline, CheckCircle, Error as ErrorIcon,
@@ -37,6 +37,8 @@ export default function Settings() {
   const [loading,      setLoading]      = useState(null);
   const [driverResult, setDriverResult] = useState(null);
   const [autoStart,    setAutoStart]    = useState(false);
+  const [winAccel,     setWinAccel]     = useState(false);
+  const [winSpeed,     setWinSpeed]     = useState(10);
   const [snack,        setSnack]        = useState(null);
   const [listening,    setListening]    = useState(null); // 'startStop' | 'pause' | null
 
@@ -45,7 +47,24 @@ export default function Settings() {
   useEffect(() => {
     refreshDriver();
     window.api.getStatus().then((st) => setAutoStart(!!st.autoStart));
+    window.api.getWindowsAccel().then((enabled) => setWinAccel(enabled));
+    window.api.getWindowsMouseSpeed().then((val) => setWinSpeed(val));
   }, []);
+
+  const handleWinAccel = async (checked) => {
+    const ok = await window.api.setWindowsAccel(checked);
+    if (ok) {
+      setWinAccel(checked);
+      setSnack({ type: 'success', msg: `Windows acceleration ${checked ? 'enabled' : 'disabled'}.` });
+    } else {
+      setSnack({ type: 'error', msg: 'Failed to update Windows settings.' });
+    }
+  };
+
+  const handleWinSpeed = async (val) => {
+    setWinSpeed(val);
+    await window.api.setWindowsMouseSpeed(val);
+  };
 
   useEffect(() => {
     if (!listening) return;
@@ -218,6 +237,64 @@ export default function Settings() {
             Esc to cancel
           </Typography>
         )}
+      </Paper>
+
+      {/* Mouse */}
+      <Paper sx={{ p: 3, mb: 3 }}>
+        <Typography variant="h6" sx={{ mb: 0.5 }}>Mouse Calibration</Typography>
+        <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 3 }}>
+          App-specific calibration for acceleration and visualization.
+        </Typography>
+
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+          <TextField
+            type="number"
+            label="DPI"
+            value={settings.Mouse_DPI}
+            onChange={(e) => {
+              const v = parseInt(e.target.value);
+              if (!isNaN(v) && v >= 100) updateSetting('Mouse_DPI', v);
+            }}
+            inputProps={{ min: 100, max: 32000, step: 100 }}
+            size="small"
+            sx={{ width: 140 }}
+          />
+          <Typography variant="caption" color="text.secondary">
+            Used for mm/s calculation on the chart. Common: 400 · 800 · 1600 · 3200
+          </Typography>
+        </Box>
+      </Paper>
+
+      {/* Windows Mouse Settings */}
+      <Paper sx={{ p: 3, mb: 3 }}>
+        <Typography variant="h6" sx={{ mb: 0.5 }}>Windows Mouse Settings</Typography>
+        <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 3 }}>
+          Direct system-level controls (applied instantly to Windows).
+        </Typography>
+
+        <ToggleRow
+          label="Enhance Pointer Precision"
+          hint="Toggle built-in Windows mouse acceleration"
+          checked={winAccel}
+          onChange={handleWinAccel}
+        />
+
+        <Box sx={{ mt: 3, mb: 1 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+            <Box>
+              <Typography variant="body2" sx={{ fontWeight: 500 }}>Pointer Speed</Typography>
+              <Typography variant="caption" color="text.secondary">Base Windows mouse sensitivity (1-20)</Typography>
+            </Box>
+            <Typography variant="body2" color="primary.main" sx={{ fontWeight: 700 }}>{winSpeed}</Typography>
+          </Box>
+          <Slider
+            value={winSpeed}
+            onChange={(_, v) => handleWinSpeed(v)}
+            min={1} max={20} step={1}
+            marks={[ { value: 10, label: 'Default' } ]}
+            color="primary"
+          />
+        </Box>
       </Paper>
 
       {/* Application */}

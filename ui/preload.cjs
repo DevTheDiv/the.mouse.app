@@ -11,7 +11,15 @@ contextBridge.exposeInMainWorld('api', {
   installDriver:   ()       => ipcRenderer.invoke('install-driver'),
   uninstallDriver: ()       => ipcRenderer.invoke('uninstall-driver'),
   getDriverStatus: ()       => ipcRenderer.invoke('get-driver-status'),
+  getAccelCurve:   ()       => ipcRenderer.invoke('get-accel-curve'),
+  saveAccelCurve:  (curve)  => ipcRenderer.invoke('save-accel-curve', curve),
   setAutostart:    (enable) => ipcRenderer.invoke('set-autostart', enable),
+
+  getWindowsAccel: ()       => ipcRenderer.invoke('get-windows-accel'),
+  setWindowsAccel: (enable) => ipcRenderer.invoke('set-windows-accel', enable),
+
+  getWindowsMouseSpeed: ()    => ipcRenderer.invoke('get-windows-mouse-speed'),
+  setWindowsMouseSpeed: (val) => ipcRenderer.invoke('set-windows-mouse-speed', val),
 
   onProcessStatus: (cb) => {
     const handler = (_, data) => cb(data);
