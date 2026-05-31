@@ -80,7 +80,7 @@ if (-not $SkipUi) {
     Ok "Renderer built"
 
     Step "Stopping any running instance"
-    @("the.mouse.app", "themouseapp", "Sensitivity Randomizer") | ForEach-Object {
+    @("TheMouse.app", "themouseapp", "Sensitivity Randomizer") | ForEach-Object {
       $procs = Get-Process -Name $_ -ErrorAction SilentlyContinue
       if ($procs) {
         $procs | Stop-Process -Force -ErrorAction SilentlyContinue
@@ -122,8 +122,8 @@ Step "Build complete"
 Write-Host ""
 Write-Host "  Output : $BuildDir" -ForegroundColor Cyan
 
-$portable  = Join-Path $BuildDir 'win-unpacked\the.mouse.app.exe'
-$installer = Join-Path $BuildDir 'the.mouse.app Setup.exe'
+$portable  = Join-Path $BuildDir 'win-unpacked\TheMouse.app.exe'
+$installer = Join-Path $BuildDir 'TheMouse.app Setup.exe'
 
 if (Test-Path $portable)  { Write-Host "  Portable  : $portable"  -ForegroundColor Green }
 if (Test-Path $installer) { Write-Host "  Installer : $installer" -ForegroundColor Green }

@@ -1,29 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Box, Typography, Paper, Button, Divider, Slider, Switch, FormControlLabel,
-  TextField, Alert, Snackbar, CircularProgress, ToggleButton, ToggleButtonGroup, Stack,
+  Box, Typography, Paper, Divider, Slider, Switch, 
+  TextField, Alert, Snackbar, CircularProgress, ToggleButton, ToggleButtonGroup,
 } from '@mui/material';
-import { PlayArrow, Stop, AccessTime } from '@mui/icons-material';
 import { useSettings } from '../context/SettingsContext';
-
-function useElapsed(startTime) {
-  const [elapsed, setElapsed] = useState(0);
-  useEffect(() => {
-    if (!startTime) { setElapsed(0); return; }
-    const tick = () => setElapsed(Math.floor((Date.now() - startTime) / 1000));
-    tick();
-    const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
-  }, [startTime]);
-  return elapsed;
-}
-
-function fmt(s) {
-  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), ss = s % 60;
-  return h > 0
-    ? `${h}:${String(m).padStart(2,'0')}:${String(ss).padStart(2,'0')}`
-    : `${String(m).padStart(2,'0')}:${String(ss).padStart(2,'0')}`;
-}
 
 function SliderRow({ label, hint, value, onChange, min, max, step, marks }) {
   return (
@@ -42,44 +22,14 @@ function SliderRow({ label, hint, value, onChange, min, max, step, marks }) {
   );
 }
 
-
 export default function SensRandomizer() {
   const { settings: s, updateSetting: set, loading: settingsLoading } = useSettings();
-  const [status,    setStatus]    = useState('stopped');
-  const [startTime, setStartTime] = useState(null);
-  const [running,   setRunning]   = useState(false);
-  const [snack,     setSnack]     = useState(null);
-  const [driverOk,  setDriverOk]  = useState(false);
-
-  const elapsed   = useElapsed(startTime);
-  const isRunning = status === 'running';
-
-  const load = useCallback(async () => {
-    const st = await window.api.getStatus();
-    setStatus(st.processStatus);
-    setStartTime(st.startTime || null);
-    setDriverOk(st.driverStatus === 'installed');
-  }, []);
+  const [snack, setSnack] = useState(null);
 
   useEffect(() => {
-    load();
-    const offStatus = window.api.onProcessStatus((d) => {
-      setStatus(d.status);
-      setStartTime(d.startTime || null);
-    });
     const offErr = window.api.onAppError((msg) => setSnack({ type: 'error', msg }));
-    return () => { offStatus?.(); offErr?.(); };
-  }, [load]);
-
-  const handleStartStop = async () => {
-    setRunning(true);
-    try {
-      if (isRunning) await window.api.stopApp();
-      else           await window.api.startApp();
-    } catch (e) { setSnack({ type: 'error', msg: e.message }); }
-    finally { setRunning(false); }
-  };
-
+    return () => { offErr?.(); };
+  }, []);
 
   if (!s || settingsLoading) return (
     <Box sx={{ display: 'flex', justifyContent: 'center', pt: 8 }}><CircularProgress /></Box>
@@ -100,38 +50,6 @@ export default function SensRandomizer() {
           onChange={(e) => set('Randomizer_Enabled', e.target.checked)}
           color="primary"
         />
-      </Paper>
-
-      {/* Status + controls */}
-      <Paper sx={{ p: 3, mb: 3, opacity: s.Randomizer_Enabled ? 1 : 0.45, transition: 'opacity 0.2s' }}>
-
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
-          <Box>
-            <Typography variant="h6" sx={{ color: isRunning ? 'success.main' : 'text.secondary', transition: 'color 0.3s' }}>
-              {isRunning ? 'Running' : 'Stopped'}
-            </Typography>
-            {isRunning && (
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
-                <AccessTime sx={{ fontSize: 14, color: 'text.secondary' }} />
-                <Typography variant="caption" color="text.secondary">{fmt(elapsed)}</Typography>
-              </Box>
-            )}
-            {!driverOk && !isRunning && (
-              <Typography variant="caption" color="error.main">Driver not installed — go to Settings</Typography>
-            )}
-          </Box>
-          <Button
-            variant={isRunning ? 'outlined' : 'contained'}
-            color={isRunning ? 'error' : 'primary'}
-            onClick={handleStartStop}
-            disabled={running || (!isRunning && !driverOk)}
-            startIcon={running ? <CircularProgress size={16} color="inherit" /> : isRunning ? <Stop /> : <PlayArrow />}
-            sx={{ px: 4, py: 1 }}
-          >
-            {running ? '…' : isRunning ? 'Stop' : 'Start'}
-          </Button>
-        </Box>
-
       </Paper>
 
       {/* Curve settings */}

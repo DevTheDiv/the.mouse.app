@@ -53,7 +53,7 @@ export default function Dashboard() {
     <Box sx={{ p: 4, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '90%' }}>
       <Box sx={{ textAlign: 'center', maxWidth: 450, width: '100%' }}>
         <Typography variant="h3" sx={{ fontWeight: 800, letterSpacing: 2, mb: 0.5, color: 'text.primary' }}>
-          the.mouse.app
+          TheMouse.app
         </Typography>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 6, letterSpacing: 1 }}>
           Mouse control tools for aim trainers

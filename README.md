@@ -1,4 +1,4 @@
-# the.mouse.app
+# TheMouse.app
 
 A Windows desktop tool for real-time mouse customization, built for aim trainers and competitive gaming. Intercepts raw mouse input at the kernel level via the [Interception](http://www.oblita.com/interception.html) driver and applies modifications before they reach any game or application.
 
@@ -25,7 +25,7 @@ Three independent modules — run any combination, or none (pass-through):
 
 ### From a release build
 
-1. Run `the.mouse.app Setup.exe` — or use the portable `win-unpacked\` folder directly.
+1. Run `TheMouse.app Setup.exe` — or use the portable `win-unpacked\` folder directly.
 2. On first launch the app installs to the system tray and enables auto-start.
 3. Go to **Settings → Interception Driver → Install Driver** and follow the UAC prompt.
 4. **Reboot.** The driver requires a reboot to activate.
@@ -39,7 +39,7 @@ Three independent modules — run any combination, or none (pass-through):
 .\build.ps1 -SkipUi   # C++ only
 ```
 
-Output lands in `build\` — `win-unpacked\` for the portable version and `the.mouse.app Setup.exe` for the installer.
+Output lands in `build\` — `win-unpacked\` for the portable version and `TheMouse.app Setup.exe` for the installer.
 
 ---
 

@@ -31,6 +31,8 @@ export function SettingsProvider({ children }) {
         Hotkey_StartStop:     raw.Hotkey_StartStop                 || 'CommandOrControl+F12',
         Hotkey_Pause:         raw.Hotkey_Pause                     || '',
         Mouse_DPI:            parseInt(raw.Mouse_DPI)              || 800,
+        Angle_Enabled:        raw.Angle_Enabled                    === '1',
+        Angle_Value:          parseFloat(raw.Angle_Value)          || 0,
       };
       setSettings(normalized);
       setOriginalSettings(JSON.stringify(normalized));
@@ -74,6 +76,8 @@ export function SettingsProvider({ children }) {
         Hotkey_StartStop:     settings.Hotkey_StartStop,
         Hotkey_Pause:         settings.Hotkey_Pause,
         Mouse_DPI:            String(settings.Mouse_DPI),
+        Angle_Enabled:        settings.Angle_Enabled ? '1' : '0',
+        Angle_Value:          String(settings.Angle_Value),
       };
       await window.api.saveSettings(toSave);
       await window.api.restartAppIfRunning();

@@ -10,10 +10,12 @@ import {
   Mouse,
   SwapVert,
   ShowChart,
+  Rotate90DegreesCcw,
 } from '@mui/icons-material';
 import Dashboard     from './pages/Dashboard';
 import SensRandomizer from './pages/SensRandomizer';
 import Sensitivity    from './pages/Sensitivity';
+import AngleCorrection from './pages/AngleCorrection';
 import Settings      from './pages/Settings';
 import AccelCurve    from './pages/AccelCurve';
 import { SettingsProvider } from './context/SettingsContext';
@@ -31,7 +33,7 @@ function TitleBar() {
     >
       <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: 'primary.main', mr: 1.5, opacity: 0.8 }} />
       <Typography variant="caption" sx={{ fontWeight: 700, letterSpacing: 2, fontSize: '0.65rem', color: 'text.secondary', textTransform: 'uppercase' }}>
-        the.mouse.app
+        TheMouse.app
       </Typography>
       <Box sx={{ flex: 1 }} />
       <Box style={{ WebkitAppRegion: 'no-drag' }} sx={{ display: 'flex', gap: 0.5 }}>
@@ -55,12 +57,16 @@ function TitleBar() {
   );
 }
 
-const NAV = [
-  { path: '/',            label: 'Dashboard',  Icon: DashboardIcon },
-  { path: '/sensitivity', label: 'Sensitivity', Icon: SwapVert      },
-  { path: '/randomizer',  label: 'Randomizer',  Icon: Mouse         },
-  { path: '/accel',       label: 'Accel',      Icon: ShowChart     },
-  { path: '/settings',    label: 'Settings',   Icon: SettingsIcon  },
+const NAV_TOP = [
+  { path: '/',            label: 'Dashboard',   Icon: DashboardIcon },
+  { path: '/sensitivity', label: 'Sensitivity',  Icon: SwapVert      },
+  { path: '/angle',       label: 'Angle',        Icon: Rotate90DegreesCcw },
+  { path: '/accel',       label: 'Accel',       Icon: ShowChart     },
+  { path: '/randomizer',  label: 'Randomizer',   Icon: Mouse         },
+];
+
+const NAV_BOTTOM = [
+  { path: '/settings',    label: 'Settings',    Icon: SettingsIcon  },
 ];
 
 function Sidebar() {
@@ -70,7 +76,27 @@ function Sidebar() {
       display: 'flex', flexDirection: 'column', alignItems: 'center',
       py: 2, gap: 0.5, flexShrink: 0,
     }}>
-      {NAV.map(({ path, label, Icon }) => (
+      {NAV_TOP.map(({ path, label, Icon }) => (
+        <NavLink key={path} to={path} end={path === '/'} style={{ textDecoration: 'none', width: '100%' }}>
+          {({ isActive }) => (
+            <Box sx={{
+              display: 'flex', flexDirection: 'column', alignItems: 'center',
+              py: 1.5, gap: 0.5,
+              color: isActive ? 'primary.main' : 'text.secondary',
+              borderLeft: '2px solid',
+              borderColor: isActive ? 'primary.main' : 'transparent',
+              bgcolor: isActive ? 'rgba(0,229,255,0.07)' : 'transparent',
+              transition: 'all 0.15s ease', cursor: 'pointer',
+              '&:hover': { color: isActive ? 'primary.main' : 'text.primary', bgcolor: 'rgba(255,255,255,0.04)' },
+            }}>
+              <Icon sx={{ fontSize: 20 }} />
+              <Typography sx={{ fontSize: '0.6rem', fontWeight: 600, letterSpacing: 0.5 }}>{label}</Typography>
+            </Box>
+          )}
+        </NavLink>
+      ))}
+      <Box sx={{ flex: 1 }} />
+      {NAV_BOTTOM.map(({ path, label, Icon }) => (
         <NavLink key={path} to={path} end={path === '/'} style={{ textDecoration: 'none', width: '100%' }}>
           {({ isActive }) => (
             <Box sx={{
@@ -105,6 +131,7 @@ export default function App() {
               <Routes>
                 <Route path="/"            element={<Dashboard />}      />
                 <Route path="/sensitivity" element={<Sensitivity />}    />
+                <Route path="/angle"       element={<AngleCorrection />} />
                 <Route path="/randomizer"  element={<SensRandomizer />} />
                 <Route path="/accel"       element={<AccelCurve />}     />
                 <Route path="/settings"    element={<Settings />}       />

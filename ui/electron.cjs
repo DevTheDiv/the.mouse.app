@@ -7,9 +7,9 @@ const fs    = require('fs');
 const zlib  = require('zlib');
 const { spawn, execSync } = require('child_process');
 
-app.name = 'the.mouse.app';
+app.name = 'TheMouse.app';
 if (process.platform === 'win32') {
-  app.setAppUserModelId('app.the.mouse');
+  app.setAppUserModelId('app.themouse');
 }
 
 /* ── constants ─────────────────────────────────────────────────── */

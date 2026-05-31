@@ -34,6 +34,8 @@ double TIMESTEP_MEAN = 0.2, TIMESTEP_STDDEV = 0.1;
 double GAUSSIAN_STDDEV = 1000.0, GAUSSIAN_WINDOW_SIZE = 5000.0;
 bool   DEBUG = false, TYPE = true;
 bool   RANDOMIZER_ENABLED = false, XY_ENABLED = false;
+bool   ANGLE_ENABLED      = false;
+double ANGLE_VALUE        = 0.0;
 
 // ---- Accel LUT (globals) ----
 static const int ACCEL_LUT_SIZE = 512;
@@ -153,6 +155,8 @@ bool readSettings(const string& path)
             else if (name == "Y_Sensitivity")        Y_RATIO            = val;
             else if (name == "Randomizer_Enabled")   RANDOMIZER_ENABLED = (bool)val;
             else if (name == "XY_Enabled")           XY_ENABLED         = (bool)val;
+            else if (name == "Angle_Enabled")        ANGLE_ENABLED      = (bool)val;
+            else if (name == "Angle_Value")          ANGLE_VALUE        = val;
             else if (name == "Mouse_DPI")            MOUSE_DPI          = val > 0 ? val : 800;
             else {
                 if (DEBUG) printf("Unknown setting: %s\n", name.c_str());
@@ -543,6 +547,24 @@ int main(int argc, char* argv[])
                 if (dt_ms > 100.0) dt_ms = 100.0; // treat idle gaps as low speed
                 double t_abs = DSec(now - prog_start).count();
                 bool paused = g_paused.load();
+
+                // 0. Angle Correction (Rotation)
+                if (ANGLE_ENABLED && ANGLE_VALUE != 0.0) {
+                    static double rot_carryX = 0.0;
+                    static double rot_carryY = 0.0;
+                    double rad = ANGLE_VALUE * (3.14159265358979323846 / 180.0);
+                    double cos_a = cos(rad);
+                    double sin_a = sin(rad);
+
+                    double rx = ms.x * cos_a - ms.y * sin_a + rot_carryX;
+                    double ry = ms.x * sin_a + ms.y * cos_a + rot_carryY;
+
+                    ms.x = (int)round(rx);
+                    ms.y = (int)round(ry);
+
+                    rot_carryX = rx - ms.x;
+                    rot_carryY = ry - ms.y;
+                }
 
                 // 1. Determine base multiplier (Randomizer)
                 double base_mult = 1.0;
