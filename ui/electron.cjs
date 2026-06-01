@@ -147,9 +147,17 @@ function readSettings() {
 
 function writeSettings(settings) {
   try {
-    const text = Object.entries(settings).map(([k, v]) => `${k} = ${v}`).join('\r\n');
-    fs.writeFileSync(getSettingsPath(), text, 'utf8');
-  } catch (e) { console.error('Failed to write settings', e); }
+    const text = Object.entries(settings).map(([k, v]) => {
+      let val = v;
+      if (typeof v === 'boolean') val = v ? '1' : '0';
+      return `${k} = ${val}`;
+    }).join('\r\n');
+    fs.writeFileSync(getSettingsPath(), text);
+    return true;
+  } catch (e) {
+    console.error('Failed to write settings', e);
+    return false;
+  }
 }
 
 function migrateSettings() {
@@ -175,9 +183,8 @@ function migrateSettings() {
     const templateSettings = parse(src);
     let changed = false;
 
-    // Add any missing keys from template to user settings
     for (const [k, v] of Object.entries(templateSettings)) {
-      if (!(k in userSettings)) {
+      if (userSettings[k] === undefined) {
         userSettings[k] = v;
         changed = true;
       }
@@ -185,7 +192,7 @@ function migrateSettings() {
 
     if (changed) {
       writeSettings(userSettings);
-      console.log('Settings migrated with new defaults.');
+      console.log('Settings migrated with new defaults');
     }
   } catch (e) {
     console.error('Migration failed', e);
@@ -291,8 +298,10 @@ function startApp() {
           const p   = (bits & 1) === 1;
           const re  = (bits & 2) === 2;
           const xye = (bits & 4) === 4;
-          const ae  = (bits & 8) === 8;
-          mainWindow?.webContents.send('live-sens', { x, y, paused: p, randomizerEnabled: re, xyEnabled: xye, accelEnabled: ae, speedX, speedY });
+          const ae   = (bits & 8)  === 8;
+          const ange = (bits & 16) === 16;
+          const se   = (bits & 32) === 32;
+          mainWindow?.webContents.send('live-sens', { x, y, paused: p, randomizerEnabled: re, xyEnabled: xye, accelEnabled: ae, angleEnabled: ange, snapEnabled: se, speedX, speedY });
         }
       }
     }
@@ -459,7 +468,7 @@ function setupIPC() {
 
   ipcMain.handle('save-accel-curve', (_, curve) => {
     fs.writeFileSync(getAccelCurvePath(), JSON.stringify(curve, null, 2), 'utf8');
-    writeAccelLut(curve.enabled, curve.multiCurve, curve.maxSpeed, curve.lutX, curve.lutY);
+    writeAccelLut(curve.enabled, curve.multiCurve, curve.maxSpeed, curve.lutX, lutY);
     return true;
   });
 
@@ -498,119 +507,87 @@ function setupIPC() {
       $mouseParams = [int[]](${t1}, ${t2}, ${speed})
       $ptr = [System.Runtime.InteropServices.Marshal]::AllocHGlobal(12)
       [System.Runtime.InteropServices.Marshal]::Copy($mouseParams, 0, $ptr, 3)
-      [Win32.WinApi]::SystemParametersInfo(0x0004, 0, $ptr, 0x03)
+      [Win32.WinApi]::SystemParametersInfo(0x0004, 0, $ptr, 0)
+      [Win32.WinApi]::SystemParametersInfo(0x0057, 0, $ptr, 0)
       [System.Runtime.InteropServices.Marshal]::FreeHGlobal($ptr)
-    `.trim();
-    
+    `;
     try {
-      const tmpPath = path.join(app.getPath('temp'), `set-accel-${Date.now()}.ps1`);
-      fs.writeFileSync(tmpPath, psCommand, 'utf8');
-      execSync(`powershell -ExecutionPolicy Bypass -File "${tmpPath}"`, { windowsHide: true });
-      fs.unlinkSync(tmpPath);
+      spawn('powershell', ['-NoProfile', '-NonInteractive', '-Command', psCommand]);
       return true;
-    } catch (e) {
-      console.error('Failed to set windows accel', e);
-      return false;
-    }
+    } catch { return false; }
   });
 
-  ipcMain.handle('get-windows-mouse-speed', () => {
+  ipcMain.handle('get-windows-speed', () => {
     try {
       const out = execSync('powershell -Command "(Get-ItemProperty \'HKCU:\\Control Panel\\Mouse\').MouseSensitivity"').toString().trim();
       return parseInt(out) || 10;
     } catch { return 10; }
   });
 
-  ipcMain.handle('set-windows-mouse-speed', (_, val) => {
-    const psCommand = `$code = @'
-      using System;
-      using System.Runtime.InteropServices;
-      namespace Win32 {
-          public class WinApi {
-              [DllImport("user32.dll")]
-              public static extern bool SystemParametersInfo(uint uiAction, uint uiParam, IntPtr pvParam, uint fWinIni);
-          }
-      }
-'@
-      if (-not ([System.Management.Automation.PSTypeName]'Win32.WinApi').Type) {
-          Add-Type -TypeDefinition $code
-      }
-      [Win32.WinApi]::SystemParametersInfo(0x0071, 0, [IntPtr]${val}, 0x03)
-    `.trim();
-    
+  ipcMain.handle('set-windows-speed', (_, speed) => {
+    const psCommand = `Set-ItemProperty 'HKCU:\\Control Panel\\Mouse' -Name 'MouseSensitivity' -Value ${speed}; (Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public class Win32 { [DllImport(\"user32.dll\")] public static extern bool SystemParametersInfo(uint uiAction, uint uiParam, uint pvParam, uint fWinIni); }' -PassThru)::SystemParametersInfo(0x0071, 0, ${speed}, 0)`;
     try {
-      const tmpPath = path.join(app.getPath('temp'), `set-speed-${Date.now()}.ps1`);
-      fs.writeFileSync(tmpPath, psCommand, 'utf8');
-      execSync(`powershell -ExecutionPolicy Bypass -File "${tmpPath}"`, { windowsHide: true });
-      fs.unlinkSync(tmpPath);
+      spawn('powershell', ['-NoProfile', '-NonInteractive', '-Command', psCommand]);
       return true;
-    } catch (e) {
-      console.error('Failed to set windows mouse speed', e);
-      return false;
-    }
+    } catch { return false; }
   });
 
-  ipcMain.on('window-minimize', () => mainWindow.minimize());
-  ipcMain.on('window-maximize', () =>
-    mainWindow.isMaximized() ? mainWindow.unmaximize() : mainWindow.maximize());
-  ipcMain.on('window-close',   () => mainWindow.close());
+  ipcMain.on('window-minimize', () => mainWindow?.minimize());
+  ipcMain.on('window-maximize', () => {
+    if (mainWindow?.isMaximized()) mainWindow.unmaximize();
+    else mainWindow?.maximize();
+  });
+  ipcMain.on('window-close',    () => mainWindow?.hide());
 }
 
-/* ── shortcuts ─────────────────────────────────────────────────── */
+/* ── hotkeys ───────────────────────────────────────────────────── */
 function refreshShortcuts() {
   globalShortcut.unregisterAll();
-  const settings = readSettings();
+  const s = readSettings();
   
-  const startStopKey = settings.Hotkey_StartStop || 'CommandOrControl+F12';
-  
-  try {
-    const ok = globalShortcut.register(startStopKey, () => {
-      if (processStatus === 'running') stopApp();
-      else startApp();
-    });
-    if (!ok) console.error(`Failed to register StartStop shortcut: ${startStopKey} (shortcut might be in use)`);
-  } catch (e) { console.error('Error registering StartStop shortcut', e); }
-
-  if (settings.Hotkey_Pause) {
+  if (s.Hotkey_StartStop) {
     try {
-      globalShortcut.register(settings.Hotkey_Pause, () => {
-        if (childProcess) {
-          childProcess.stdin.write('TOGGLE\n');
-        }
+      globalShortcut.register(s.Hotkey_StartStop, () => {
+        if (processStatus === 'running') stopApp();
+        else startApp();
       });
-    } catch (e) { console.error('Failed to register Pause shortcut', e); }
+    } catch (e) { console.error('Failed to register start/stop shortcut', e); }
+  }
+
+  if (s.Hotkey_Pause) {
+    try {
+      globalShortcut.register(s.Hotkey_Pause, () => {
+        if (childProcess) childProcess.stdin.write('TOGGLE\n');
+      });
+    } catch (e) { console.error('Failed to register pause shortcut', e); }
   }
 }
 
 /* ── app lifecycle ─────────────────────────────────────────────── */
 app.whenReady().then(async () => {
-  // Enable auto-start on first launch
-  const marker = path.join(app.getPath('userData'), '.themouseapp-initialized');
-  if (!fs.existsSync(marker)) {
-    app.setLoginItemSettings({ openAtLogin: true });
-    fs.writeFileSync(marker, '1');
-  }
-
-  setupIPC();
   migrateSettings();
   createWindow();
   await createTray();
+  setupIPC();
   refreshShortcuts();
 
-  // Auto-start engine if it was running last session
-  try {
-    const s = readSettings();
-    if (s.Running === '1') {
-      startApp();
-    }
-  } catch (e) { /* ignore startup auto-start errors */ }
+  // If app was running when last closed, resume it
+  const s = readSettings();
+  if (s.Running === '1') startApp();
 });
 
-app.on('window-all-closed', (e) => e.preventDefault()); // keep alive in tray
+app.on('window-all-closed', () => {
+  if (process.platform !== 'darwin') {
+    // Keep app running in background (tray)
+  }
+});
+
+app.on('activate', () => {
+  if (BrowserWindow.getAllWindows().length === 0) createWindow();
+});
 
 app.on('before-quit', () => {
   app.isQuitting = true;
-  if (childProcess) childProcess.kill();
+  stopApp();
+  globalShortcut.unregisterAll();
 });
-
-app.on('activate', () => mainWindow?.show());

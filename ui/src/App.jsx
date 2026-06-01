@@ -11,11 +11,13 @@ import {
   SwapVert,
   ShowChart,
   Rotate90DegreesCcw,
+  AlignHorizontalLeft,
 } from '@mui/icons-material';
 import Dashboard     from './pages/Dashboard';
 import SensRandomizer from './pages/SensRandomizer';
 import Sensitivity    from './pages/Sensitivity';
 import AngleCorrection from './pages/AngleCorrection';
+import Snap           from './pages/Snap';
 import Settings      from './pages/Settings';
 import AccelCurve    from './pages/AccelCurve';
 import { SettingsProvider } from './context/SettingsContext';
@@ -60,6 +62,7 @@ function TitleBar() {
 const NAV_TOP = [
   { path: '/',            label: 'Dashboard',   Icon: DashboardIcon },
   { path: '/sensitivity', label: 'Sensitivity',  Icon: SwapVert      },
+  { path: '/snap',        label: 'Snap',        Icon: AlignHorizontalLeft },
   { path: '/angle',       label: 'Angle',        Icon: Rotate90DegreesCcw },
   { path: '/accel',       label: 'Accel',       Icon: ShowChart     },
   { path: '/randomizer',  label: 'Randomizer',   Icon: Mouse         },
@@ -131,6 +134,7 @@ export default function App() {
               <Routes>
                 <Route path="/"            element={<Dashboard />}      />
                 <Route path="/sensitivity" element={<Sensitivity />}    />
+                <Route path="/snap"        element={<Snap />}           />
                 <Route path="/angle"       element={<AngleCorrection />} />
                 <Route path="/randomizer"  element={<SensRandomizer />} />
                 <Route path="/accel"       element={<AccelCurve />}     />

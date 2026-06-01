@@ -7,10 +7,10 @@ import { PlayArrow, Stop } from '@mui/icons-material';
 export default function Dashboard() {
   const [status,       setStatus]       = useState('stopped');
   const [driverStatus, setDriverStatus] = useState('not_installed');
-  const [tools,        setTools]        = useState({ randomizer: true, xy: true, accel: false });
+  const [tools,        setTools]        = useState({ randomizer: true, xy: true, accel: false, angle: false, snap: false });
   const [error,        setError]        = useState(null);
   const [loading,      setLoading]      = useState(false);
-  const [liveSens,     setLiveSens]     = useState({ x: 1.0, y: 1.0, paused: false, randomizerEnabled: false, xyEnabled: false, accelEnabled: false });
+  const [liveSens,     setLiveSens]     = useState({ x: 1.0, y: 1.0, paused: false, randomizerEnabled: false, xyEnabled: false, accelEnabled: false, angleEnabled: false, snapEnabled: false });
 
   const isRunning = status === 'running';
 
@@ -25,6 +25,8 @@ export default function Dashboard() {
         randomizer: raw.Randomizer_Enabled === '1' || (raw.Randomizer_Enabled === undefined),
         xy:         raw.XY_Enabled === '1',
         accel:      accel?.enabled ?? false,
+        angle:      raw.Angle_Enabled === '1',
+        snap:       raw.Snap_Enabled === '1',
       });
     } catch (e) { setError(e.message); }
   }, []);
@@ -35,7 +37,13 @@ export default function Dashboard() {
     const offError  = window.api.onAppError((msg) => setError(msg));
     const offLive   = window.api.onLiveSens((d) => {
       setLiveSens(d);
-      setTools({ randomizer: d.randomizerEnabled, xy: d.xyEnabled, accel: d.accelEnabled });
+      setTools({ 
+        randomizer: d.randomizerEnabled, 
+        xy: d.xyEnabled, 
+        accel: d.accelEnabled, 
+        angle: d.angleEnabled,
+        snap: d.snapEnabled
+      });
     });
     return () => { offStatus?.(); offError?.(); offLive?.(); };
   }, [load]);
@@ -177,6 +185,20 @@ export default function Dashboard() {
             color={tools.accel ? 'primary' : 'default'}
             label="Accel Curve"
             sx={{ fontSize: '0.7rem', height: 24, px: 1, opacity: tools.accel ? 1 : 0.4, fontWeight: 600 }}
+          />
+          <Chip
+            size="small"
+            variant={tools.angle ? 'filled' : 'outlined'}
+            color={tools.angle ? 'primary' : 'default'}
+            label="Angle"
+            sx={{ fontSize: '0.7rem', height: 24, px: 1, opacity: tools.angle ? 1 : 0.4, fontWeight: 600 }}
+          />
+          <Chip
+            size="small"
+            variant={tools.snap ? 'filled' : 'outlined'}
+            color={tools.snap ? 'primary' : 'default'}
+            label="Snap"
+            sx={{ fontSize: '0.7rem', height: 24, px: 1, opacity: tools.snap ? 1 : 0.4, fontWeight: 600 }}
           />
         </Box>
       </Box>

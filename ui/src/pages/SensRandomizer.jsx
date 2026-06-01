@@ -77,14 +77,6 @@ export default function SensRandomizer() {
 
         <Divider sx={{ my: 2 }} />
 
-        <SliderRow
-          label="Baseline Sensitivity"
-          hint="Center of the randomization range"
-          value={s.Baseline_Sensitivity}
-          onChange={(v) => set('Baseline_Sensitivity', v)}
-          min={0.1} max={5} step={0.05}
-        />
-
         <Box sx={{ mb: 3 }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
             <Box>

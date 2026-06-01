@@ -2,7 +2,7 @@
 
 A Windows desktop tool for real-time mouse customization, built for aim trainers and competitive gaming. Intercepts raw mouse input at the kernel level via the [Interception](http://www.oblita.com/interception.html) driver and applies modifications before they reach any game or application.
 
-Four independent modules — run any combination, or none (pass-through):
+Five independent modules — run any combination, or none (pass-through):
 
 | Module | What it does |
 |---|---|
@@ -10,6 +10,7 @@ Four independent modules — run any combination, or none (pass-through):
 | **Sensitivity Randomizer** | Randomizes your sensitivity on a configurable curve during practice sessions |
 | **Acceleration Curve** | Maps axial mouse speed (mm/s) to sensitivity multipliers via custom curves |
 | **Angle Correction** | Rotates raw input to compensate for physical mouse grip tilt |
+| **Angle Snapping** | Snaps movements to the nearest 90° axis for drawing straight lines |
 
 ---
 
@@ -17,8 +18,25 @@ Four independent modules — run any combination, or none (pass-through):
 
 - Windows 10/11 x64
 - **Secure Boot must be disabled** (required by the Interception driver)
+- **Anti-Cheat Compatibility**: See [Anti-Cheat & Vanguard](#anti-cheat--vanguard) below.
 - Visual Studio 2022 with "Desktop development with C++" (to build from source)
 - Node.js 18+ (to build from source)
+
+---
+
+## Anti-Cheat & Vanguard
+
+> [!WARNING]
+> **The Interception driver is currently blacklisted by Riot Vanguard.**
+
+If you have Vanguard installed (Valorant / League of Legends), the driver will be blocked from loading at system startup. This results in the app showing a **"Driver Offline"** status even if installation was successful.
+
+To use this app on a Vanguard system:
+1. Disable Vanguard (Right-click tray icon -> Exit Vanguard).
+2. **Reboot.** The driver can only load at boot-time if Vanguard is not active.
+3. To play Vanguard-protected games again, you must re-enable Vanguard and reboot (which will disable this app's driver).
+
+Other anti-cheats (EAC, BattlEye) may also flag or block the Interception driver. Use at your own risk in competitive environments.
 
 ---
 
@@ -100,6 +118,20 @@ Compensates for physical mouse grip tilt. If you hold your mouse at an angle, st
 |---|---|---|
 | `Angle_Enabled` | `0` | `1` = rotation active |
 | `Angle_Value` | `0` | Degrees of rotation (-180 to 180) |
+
+### Angle Snapping
+
+Assists in drawing perfectly straight horizontal or vertical lines by ignoring small axial deviations.
+
+- **Threshold control** — adjust how "sticky" the axes feel (1° to 45°)
+- Snaps to the nearest 90-degree axis (0°, 90°, 180°, 270°)
+- Direction is determined from a rolling average of recent movement, so integer quantization of individual mouse events doesn't defeat the snap at low speeds
+- Ideal for creative work or specific aim-training scenarios where axial consistency is required
+
+| Setting | Default | Description |
+|---|---|---|
+| `Snap_Enabled` | `0` | `1` = snapping active |
+| `Snap_Threshold` | `20` | Maximum deviation in degrees to snap to axis |
 
 ---
 

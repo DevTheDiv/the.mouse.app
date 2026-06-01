@@ -33,6 +33,8 @@ export function SettingsProvider({ children }) {
         Mouse_DPI:            parseInt(raw.Mouse_DPI)              || 800,
         Angle_Enabled:        raw.Angle_Enabled                    === '1',
         Angle_Value:          parseFloat(raw.Angle_Value)          || 0,
+        Snap_Enabled:         raw.Snap_Enabled                     === '1',
+        Snap_Threshold:       parseFloat(raw.Snap_Threshold)       || 20,
       };
       setSettings(normalized);
       setOriginalSettings(JSON.stringify(normalized));
@@ -78,6 +80,8 @@ export function SettingsProvider({ children }) {
         Mouse_DPI:            String(settings.Mouse_DPI),
         Angle_Enabled:        settings.Angle_Enabled ? '1' : '0',
         Angle_Value:          String(settings.Angle_Value),
+        Snap_Enabled:         settings.Snap_Enabled  ? '1' : '0',
+        Snap_Threshold:       String(settings.Snap_Threshold),
       };
       await window.api.saveSettings(toSave);
       await window.api.restartAppIfRunning();

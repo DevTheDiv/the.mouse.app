@@ -36,6 +36,8 @@ bool   DEBUG = false, TYPE = true;
 bool   RANDOMIZER_ENABLED = false, XY_ENABLED = false;
 bool   ANGLE_ENABLED      = false;
 double ANGLE_VALUE        = 0.0;
+bool   SNAP_ENABLED       = false;
+double SNAP_THRESHOLD     = 5.0; // degrees
 
 // ---- Accel LUT (globals) ----
 static const int ACCEL_LUT_SIZE = 512;
@@ -143,7 +145,7 @@ bool readSettings(const string& path)
             if (DEBUG) printf("Loaded: %s = %.2f\n", name.c_str(), val);
 
             if      (name == "Smooth")               TYPE          = (bool)val;
-            else if (name == "Baseline_Sensitivity") SENS_MEAN     = val;
+            else if (name == "Baseline_Sensitivity") { /* derived from range */ }
             else if (name == "Min_Sensitivity")      MIN_SENS      = val;
             else if (name == "Max_Sensitivity")      MAX_SENS      = val;
             else if (name == "Spread")               SENS_SPREAD   = val;
@@ -157,6 +159,8 @@ bool readSettings(const string& path)
             else if (name == "XY_Enabled")           XY_ENABLED         = (bool)val;
             else if (name == "Angle_Enabled")        ANGLE_ENABLED      = (bool)val;
             else if (name == "Angle_Value")          ANGLE_VALUE        = val;
+            else if (name == "Snap_Enabled")         SNAP_ENABLED       = (bool)val;
+            else if (name == "Snap_Threshold")      SNAP_THRESHOLD     = val;
             else if (name == "Mouse_DPI")            MOUSE_DPI          = val > 0 ? val : 800;
             else {
                 if (DEBUG) printf("Unknown setting: %s\n", name.c_str());
@@ -168,10 +172,10 @@ bool readSettings(const string& path)
         }
     }
 
-    if (SENS_MEAN <= 0)           { SENS_MEAN    = 1;          garbage = true; }
+    if (MIN_SENS <= 0)            { MIN_SENS     = 0.5;        garbage = true; }
+    if (MAX_SENS <= MIN_SENS)     { MAX_SENS     = MIN_SENS * 2.0; garbage = true; }
+    SENS_MEAN = (MIN_SENS + MAX_SENS) / 2.0;
     if (SENS_SPREAD <= 0)         { SENS_SPREAD  = 1e-7;       garbage = true; }
-    if (SENS_MEAN < MIN_SENS)     { MIN_SENS     = SENS_MEAN / 2.0; garbage = true; }
-    if (SENS_MEAN > MAX_SENS)     { MAX_SENS     = SENS_MEAN * 2.0; garbage = true; }
     if (SMOOTH_AMT < 0)           { SMOOTH_AMT   = 0;          garbage = true; }
     if (TIMESTEP_MEAN <= 0)       { TIMESTEP_MEAN = 0.2;       garbage = true; }
     if (TYPE != 0 && TYPE != 1)   { TYPE         = 1;          garbage = true; }
@@ -433,11 +437,14 @@ int main(int argc, char* argv[])
         printf("Type: %s\nBase Sensitivity: %.2f\nMin: %.2f\nMax: %.2f\n"
                "Spread: %.2f\nSmoothing: %d\nTimestep: %.1f s\nDebug: %d\n"
                "Randomizer Enabled: %d\nXY Enabled: %d\nX Sensitivity: %.2f\nY Sensitivity: %.2f\n"
-               "Accel Enabled: %d\nAccel Multi: %d\nAccel Max Speed: %.0f mm/s\nMouse DPI: %.0f\n\n",
+               "Accel Enabled: %d\nAccel Multi: %d\nAccel Max Speed: %.0f mm/s\n"
+               "Snap Enabled: %d\nSnap Threshold: %.1f deg\n"
+               "Mouse DPI: %.0f\n\n",
                type_str, SENS_MEAN, MIN_SENS, MAX_SENS,
                SENS_SPREAD, SMOOTH_AMT, TIMESTEP_MEAN, DEBUG,
                RANDOMIZER_ENABLED, XY_ENABLED, X_RATIO, Y_RATIO,
-               ACCEL_ENABLED, ACCEL_MULTI, ACCEL_MAX_SPEED, MOUSE_DPI);
+               ACCEL_ENABLED, ACCEL_MULTI, ACCEL_MAX_SPEED,
+               SNAP_ENABLED, SNAP_THRESHOLD, MOUSE_DPI);
         SetConsoleTextAttribute(hConsole, 0x08);
 
         if (garbage) {
@@ -566,6 +573,49 @@ int main(int argc, char* argv[])
                     rot_carryY = ry - ms.y;
                 }
 
+                // 0.5 Angle Snapping
+                // Direction is determined from an EMA of recent events so that integer
+                // quantization of individual deltas (e.g. a lone (1,1) during an otherwise
+                // horizontal stroke) doesn't defeat the snap.
+                if (SNAP_ENABLED && SNAP_THRESHOLD > 0.0 && (ms.x != 0 || ms.y != 0)) {
+                    static double emaX = 0.0, emaY = 0.0;
+                    static double snap_carryX = 0.0, snap_carryY = 0.0;
+
+                    emaX = 0.9 * emaX + 0.1 * ms.x;
+                    emaY = 0.9 * emaY + 0.1 * ms.y;
+
+                    double emaMag = sqrt(emaX * emaX + emaY * emaY);
+                    bool near_h = false, near_v = false;
+
+                    if (emaMag > 0.01) {
+                        double angle_deg = atan2(emaY, emaX) * (180.0 / 3.14159265358979323846);
+                        if (angle_deg < 0) angle_deg += 360.0;
+
+                        near_h = angle_deg < SNAP_THRESHOLD
+                               || angle_deg > 360.0 - SNAP_THRESHOLD
+                               || (angle_deg > 180.0 - SNAP_THRESHOLD && angle_deg < 180.0 + SNAP_THRESHOLD);
+                        near_v = (angle_deg >  90.0 - SNAP_THRESHOLD && angle_deg <  90.0 + SNAP_THRESHOLD)
+                               || (angle_deg > 270.0 - SNAP_THRESHOLD && angle_deg < 270.0 + SNAP_THRESHOLD);
+                    }
+
+                    if (near_h) {
+                        double nx = (double)ms.x + snap_carryX;
+                        ms.x = (int)round(nx);
+                        snap_carryX = nx - ms.x;
+                        ms.y = 0;
+                        snap_carryY = 0.0;
+                    } else if (near_v) {
+                        double ny = (double)ms.y + snap_carryY;
+                        ms.y = (int)round(ny);
+                        snap_carryY = ny - ms.y;
+                        ms.x = 0;
+                        snap_carryX = 0.0;
+                    } else {
+                        snap_carryX = 0.0;
+                        snap_carryY = 0.0;
+                    }
+                }
+
                 // 1. Determine base multiplier (Randomizer)
                 double base_mult = 1.0;
                 if (RANDOMIZER_ENABLED && !paused)
@@ -573,10 +623,6 @@ int main(int argc, char* argv[])
                     if (TYPE == 0)
                     {
                         // ---- Step mode ----
-                        while (step_t.back() <= t_abs + TIMESTEP_MEAN * 10)
-                            rawGen(step_st, step_st.time + TIMESTEP_MEAN * 10,
-                                   step_t, step_s);
-
                         while (step_i < step_t.size() && step_t[step_i] <= t_abs)
                             step_i++;
 
@@ -659,6 +705,34 @@ int main(int argc, char* argv[])
                 // 4. Transform mouse stroke
                 double dx = ms.x * live_x + carryX;
                 double dy = ms.y * live_y + carryY;
+
+                // 4.5 Angle Snapping (Floating Point)
+                if (SNAP_ENABLED && SNAP_THRESHOLD > 0.0 && (dx != 0.0 || dy != 0.0)) {
+                    double angle_rad = atan2(dy, dx);
+                    double angle_deg = angle_rad * (180.0 / 3.14159265358979323846);
+                    if (angle_deg < 0) angle_deg += 360.0;
+
+                    double snapped = angle_deg;
+                    bool should_snap = false;
+
+                    if (abs(angle_deg - 0.0) < SNAP_THRESHOLD || abs(angle_deg - 360.0) < SNAP_THRESHOLD) {
+                        snapped = 0.0; should_snap = true;
+                    } else if (abs(angle_deg - 90.0) < SNAP_THRESHOLD) {
+                        snapped = 90.0; should_snap = true;
+                    } else if (abs(angle_deg - 180.0) < SNAP_THRESHOLD) {
+                        snapped = 180.0; should_snap = true;
+                    } else if (abs(angle_deg - 270.0) < SNAP_THRESHOLD) {
+                        snapped = 270.0; should_snap = true;
+                    }
+
+                    if (should_snap) {
+                        double mag = sqrt(dx * dx + dy * dy);
+                        double sn_rad = snapped * (3.14159265358979323846 / 180.0);
+                        dx = cos(sn_rad) * mag;
+                        dy = sin(sn_rad) * mag;
+                    }
+                }
+
                 carryX = dx - floor(dx);
                 carryY = dy - floor(dy);
                 ms.x   = (int)floor(dx);
@@ -667,12 +741,14 @@ int main(int argc, char* argv[])
                 // 5. Periodic live output for UI
                 if (DSec(now - last_live).count() > 0.033) { // ~30 Hz
                     last_live = now;
-                    // Status bitmask: 1=Paused, 2=RandomizerEnabled, 4=XYEnabled, 8=AccelEnabled
+                    // Status bitmask: 1=Paused, 2=RandomizerEnabled, 4=XYEnabled, 8=AccelEnabled, 16=AngleEnabled, 32=SnapEnabled
                     int status_bits = 0;
                     if (paused)             status_bits |= 1;
                     if (RANDOMIZER_ENABLED) status_bits |= 2;
                     if (XY_ENABLED)         status_bits |= 4;
                     if (ACCEL_ENABLED)      status_bits |= 8;
+                    if (ANGLE_ENABLED)      status_bits |= 16;
+                    if (SNAP_ENABLED)       status_bits |= 32;
                     printf("LIVE:%.4f:%.4f:%d:%.1f:%.1f\n", live_x, live_y, status_bits, speed_x, speed_y);
                     fflush(stdout);
                 }
