@@ -336,7 +336,7 @@ export default function AccelCurve() {
 
   const handleSvgMouseDown = useCallback((e) => {
     if (e.button === 1) { e.preventDefault(); panRef.current = { x: e.clientX, y: e.clientY, v: { ...viewRef.current } }; setIsPanning(true); return; }
-    if (e.button === 0 && (e.target === svgRef.current || e.target.dataset.bg)) { bgDownPos.current = { x: e.clientX, y: e.clientY }; }
+    if (e.button === 0) { bgDownPos.current = { x: e.clientX, y: e.clientY }; }
     else { bgDownPos.current = null; }
   }, []);
 
