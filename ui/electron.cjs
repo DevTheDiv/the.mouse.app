@@ -485,51 +485,35 @@ function setupIPC() {
   });
 
   ipcMain.handle('set-windows-accel', (_, enabled) => {
-    const speed = enabled ? 1 : 0;
-    const t1    = enabled ? 6 : 0;
-    const t2    = enabled ? 10 : 0;
-    const psCommand = `$code = @'
-      using System;
-      using System.Runtime.InteropServices;
-      namespace Win32 {
-          public class WinApi {
-              [DllImport("user32.dll")]
-              public static extern bool SystemParametersInfo(uint uiAction, uint uiParam, IntPtr pvParam, uint fWinIni);
-          }
-      }
-'@
-      if (-not ([System.Management.Automation.PSTypeName]'Win32.WinApi').Type) {
-          Add-Type -TypeDefinition $code
-      }
-      Set-ItemProperty 'HKCU:\\Control Panel\\Mouse' -Name 'MouseSpeed' -Value ${speed}
-      Set-ItemProperty 'HKCU:\\Control Panel\\Mouse' -Name 'MouseThreshold1' -Value ${t1}
-      Set-ItemProperty 'HKCU:\\Control Panel\\Mouse' -Name 'MouseThreshold2' -Value ${t2}
-      $mouseParams = [int[]](${t1}, ${t2}, ${speed})
-      $ptr = [System.Runtime.InteropServices.Marshal]::AllocHGlobal(12)
-      [System.Runtime.InteropServices.Marshal]::Copy($mouseParams, 0, $ptr, 3)
-      [Win32.WinApi]::SystemParametersInfo(0x0004, 0, $ptr, 0)
-      [Win32.WinApi]::SystemParametersInfo(0x0057, 0, $ptr, 0)
-      [System.Runtime.InteropServices.Marshal]::FreeHGlobal($ptr)
-    `;
-    try {
-      spawn('powershell', ['-NoProfile', '-NonInteractive', '-Command', psCommand]);
-      return true;
-    } catch { return false; }
+    const v = enabled ? 1 : 0, t1 = enabled ? 6 : 0, t2 = enabled ? 10 : 0;
+    const lines = [
+      `Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public class W32 { [DllImport("user32.dll")] public static extern bool SystemParametersInfo(uint a, uint b, int[] c, uint d); }'`,
+      `Set-ItemProperty 'HKCU:\\Control Panel\\Mouse' -Name MouseSpeed      -Value ${v}`,
+      `Set-ItemProperty 'HKCU:\\Control Panel\\Mouse' -Name MouseThreshold1 -Value ${t1}`,
+      `Set-ItemProperty 'HKCU:\\Control Panel\\Mouse' -Name MouseThreshold2 -Value ${t2}`,
+      `[W32]::SystemParametersInfo(4, 0, [int[]](${t1}, ${t2}, ${v}), 3)`,
+    ];
+    const encoded = Buffer.from(lines.join('\r\n'), 'utf16le').toString('base64');
+    try { execSync(`powershell -NoProfile -NonInteractive -EncodedCommand ${encoded}`); return true; }
+    catch { return false; }
   });
 
-  ipcMain.handle('get-windows-speed', () => {
+  ipcMain.handle('get-windows-mouse-speed', () => {
     try {
       const out = execSync('powershell -Command "(Get-ItemProperty \'HKCU:\\Control Panel\\Mouse\').MouseSensitivity"').toString().trim();
       return parseInt(out) || 10;
     } catch { return 10; }
   });
 
-  ipcMain.handle('set-windows-speed', (_, speed) => {
-    const psCommand = `Set-ItemProperty 'HKCU:\\Control Panel\\Mouse' -Name 'MouseSensitivity' -Value ${speed}; (Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public class Win32 { [DllImport(\"user32.dll\")] public static extern bool SystemParametersInfo(uint uiAction, uint uiParam, uint pvParam, uint fWinIni); }' -PassThru)::SystemParametersInfo(0x0071, 0, ${speed}, 0)`;
-    try {
-      spawn('powershell', ['-NoProfile', '-NonInteractive', '-Command', psCommand]);
-      return true;
-    } catch { return false; }
+  ipcMain.handle('set-windows-mouse-speed', (_, speed) => {
+    const lines = [
+      `Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public class W32S { [DllImport("user32.dll")] public static extern bool SystemParametersInfo(uint a, uint b, uint c, uint d); }'`,
+      `Set-ItemProperty 'HKCU:\\Control Panel\\Mouse' -Name MouseSensitivity -Value ${speed}`,
+      `[W32S]::SystemParametersInfo(0x71, 0, ${speed}, 3)`,
+    ];
+    const encoded = Buffer.from(lines.join('\r\n'), 'utf16le').toString('base64');
+    try { execSync(`powershell -NoProfile -NonInteractive -EncodedCommand ${encoded}`); return true; }
+    catch { return false; }
   });
 
   ipcMain.on('window-minimize', () => mainWindow?.minimize());
