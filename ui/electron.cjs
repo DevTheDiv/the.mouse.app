@@ -468,7 +468,7 @@ function setupIPC() {
 
   ipcMain.handle('save-accel-curve', (_, curve) => {
     fs.writeFileSync(getAccelCurvePath(), JSON.stringify(curve, null, 2), 'utf8');
-    writeAccelLut(curve.enabled, curve.multiCurve, curve.maxSpeed, curve.lutX, lutY);
+    writeAccelLut(curve.enabled, curve.multiCurve, curve.maxSpeed, curve.lutX, curve.lutY);
     return true;
   });
 
