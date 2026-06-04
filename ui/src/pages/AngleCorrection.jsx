@@ -5,6 +5,7 @@ import {
 } from '@mui/material';
 import { RestartAlt, Rotate90DegreesCcw } from '@mui/icons-material';
 import { useSettings } from '../context/SettingsContext';
+import ModulePresetManager from '../components/ModulePresetManager';
 
 const DIAL_SIZE = 240;
 const CENTER = DIAL_SIZE / 2;
@@ -15,6 +16,17 @@ export default function AngleCorrection() {
   const dialRef = useRef(null);
 
   const angle = s?.Angle_Value ?? 0;
+
+  const capturePreset = () => ({
+    Angle_Enabled: !!s.Angle_Enabled,
+    Angle_Value: Number(s.Angle_Value),
+  });
+
+  const applyPreset = (payload) => {
+    if (!payload) return;
+    if (payload.Angle_Enabled !== undefined) set('Angle_Enabled', !!payload.Angle_Enabled);
+    if (payload.Angle_Value !== undefined) set('Angle_Value', Number(payload.Angle_Value));
+  };
 
   const handleMouseMove = useCallback((e) => {
     if (!isDragging || !dialRef.current) return;
@@ -148,6 +160,13 @@ export default function AngleCorrection() {
           </Typography>
         </Box>
       </Paper>
+
+      <ModulePresetManager
+        moduleKey="angle"
+        title="Custom Presets"
+        captureData={capturePreset}
+        onApplyPreset={applyPreset}
+      />
     </Box>
   );
 }

@@ -30,6 +30,9 @@ export function SettingsProvider({ children }) {
         Y_Sensitivity:        parseFloat(raw.Y_Sensitivity)        || 1,
         Hotkey_StartStop:     raw.Hotkey_StartStop                 || 'CommandOrControl+F12',
         Hotkey_Pause:         raw.Hotkey_Pause                     || '',
+        Hotkey_ProfilePrev:   raw.Hotkey_ProfilePrev ?? 'Alt+Shift+Left',
+        Hotkey_ProfileNext:   raw.Hotkey_ProfileNext ?? 'Alt+Shift+Right',
+        Notifications_Enabled: raw.Notifications_Enabled           !== '0',
         Mouse_DPI:            parseInt(raw.Mouse_DPI)              || 800,
         Angle_Enabled:        raw.Angle_Enabled                    === '1',
         Angle_Value:          parseFloat(raw.Angle_Value)          || 0,
@@ -47,6 +50,13 @@ export function SettingsProvider({ children }) {
 
   useEffect(() => {
     fetchSettings();
+  }, [fetchSettings]);
+
+  useEffect(() => {
+    const offProfileChanged = window.api.onProfileChanged?.(() => {
+      fetchSettings();
+    });
+    return () => offProfileChanged?.();
   }, [fetchSettings]);
 
   const updateSetting = (key, val) => {
@@ -77,6 +87,9 @@ export function SettingsProvider({ children }) {
         Y_Sensitivity:        String(settings.Y_Sensitivity),
         Hotkey_StartStop:     settings.Hotkey_StartStop,
         Hotkey_Pause:         settings.Hotkey_Pause,
+        Hotkey_ProfilePrev:   settings.Hotkey_ProfilePrev,
+        Hotkey_ProfileNext:   settings.Hotkey_ProfileNext,
+        Notifications_Enabled: settings.Notifications_Enabled ? '1' : '0',
         Mouse_DPI:            String(settings.Mouse_DPI),
         Angle_Enabled:        settings.Angle_Enabled ? '1' : '0',
         Angle_Value:          String(settings.Angle_Value),

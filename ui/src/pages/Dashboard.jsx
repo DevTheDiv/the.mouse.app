@@ -35,6 +35,7 @@ export default function Dashboard() {
     load();
     const offStatus = window.api.onProcessStatus((d) => setStatus(d.status));
     const offError  = window.api.onAppError((msg) => setError(msg));
+    const offProfileChanged = window.api.onProfileChanged?.(() => load());
     const offLive   = window.api.onLiveSens((d) => {
       setLiveSens(d);
       setTools({ 
@@ -45,7 +46,7 @@ export default function Dashboard() {
         snap: d.snapEnabled
       });
     });
-    return () => { offStatus?.(); offError?.(); offLive?.(); };
+    return () => { offStatus?.(); offError?.(); offProfileChanged?.(); offLive?.(); };
   }, [load]);
 
   const handleStartStop = async () => {

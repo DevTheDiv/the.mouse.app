@@ -4,9 +4,21 @@ import {
 } from '@mui/material';
 import { AlignHorizontalLeft } from '@mui/icons-material';
 import { useSettings } from '../context/SettingsContext';
+import ModulePresetManager from '../components/ModulePresetManager';
 
 export default function Snap() {
   const { settings: s, updateSetting: set, loading } = useSettings();
+
+  const capturePreset = () => ({
+    Snap_Enabled: !!s.Snap_Enabled,
+    Snap_Threshold: Number(s.Snap_Threshold),
+  });
+
+  const applyPreset = (payload) => {
+    if (!payload) return;
+    if (payload.Snap_Enabled !== undefined) set('Snap_Enabled', !!payload.Snap_Enabled);
+    if (payload.Snap_Threshold !== undefined) set('Snap_Threshold', Number(payload.Snap_Threshold));
+  };
 
   if (loading || !s) return (
     <Box sx={{ display: 'flex', justifyContent: 'center', pt: 8 }}><CircularProgress /></Box>
@@ -69,6 +81,13 @@ export default function Snap() {
           </Typography>
         </Box>
       </Paper>
+
+      <ModulePresetManager
+        moduleKey="snap"
+        title="Custom Presets"
+        captureData={capturePreset}
+        onApplyPreset={applyPreset}
+      />
     </Box>
   );
 }

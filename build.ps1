@@ -123,8 +123,10 @@ Write-Host ""
 Write-Host "  Output : $BuildDir" -ForegroundColor Cyan
 
 $portable  = Join-Path $BuildDir 'win-unpacked\TheMouse.app.exe'
-$installer = Join-Path $BuildDir 'TheMouse.app Setup.exe'
+$installer = Get-ChildItem -Path $BuildDir -Filter 'TheMouse.app Setup *.exe' -ErrorAction SilentlyContinue |
+  Sort-Object LastWriteTime -Descending |
+  Select-Object -First 1 -ExpandProperty FullName
 
 if (Test-Path $portable)  { Write-Host "  Portable  : $portable"  -ForegroundColor Green }
-if (Test-Path $installer) { Write-Host "  Installer : $installer" -ForegroundColor Green }
+if ($installer -and (Test-Path $installer)) { Write-Host "  Installer : $installer" -ForegroundColor Green }
 Write-Host ""

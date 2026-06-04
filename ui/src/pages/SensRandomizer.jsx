@@ -4,6 +4,7 @@ import {
   TextField, Alert, Snackbar, CircularProgress, ToggleButton, ToggleButtonGroup,
 } from '@mui/material';
 import { useSettings } from '../context/SettingsContext';
+import ModulePresetManager from '../components/ModulePresetManager';
 
 function SliderRow({ label, hint, value, onChange, min, max, step, marks }) {
   return (
@@ -25,6 +26,32 @@ function SliderRow({ label, hint, value, onChange, min, max, step, marks }) {
 export default function SensRandomizer() {
   const { settings: s, updateSetting: set, loading: settingsLoading } = useSettings();
   const [snack, setSnack] = useState(null);
+
+  const capturePreset = () => ({
+    Randomizer_Enabled: !!s.Randomizer_Enabled,
+    Smooth: !!s.Smooth,
+    Min_Sensitivity: Number(s.Min_Sensitivity),
+    Max_Sensitivity: Number(s.Max_Sensitivity),
+    Spread: Number(s.Spread),
+    Smoothing: Number(s.Smoothing),
+    Timestep: Number(s.Timestep),
+  });
+
+  const applyPreset = (payload) => {
+    if (!payload) return;
+    const keys = [
+      'Randomizer_Enabled',
+      'Smooth',
+      'Min_Sensitivity',
+      'Max_Sensitivity',
+      'Spread',
+      'Smoothing',
+      'Timestep',
+    ];
+    keys.forEach((k) => {
+      if (payload[k] !== undefined) set(k, payload[k]);
+    });
+  };
 
   useEffect(() => {
     const offErr = window.api.onAppError((msg) => setSnack({ type: 'error', msg }));
@@ -130,6 +157,13 @@ export default function SensRandomizer() {
           </Box>
         )}
       </Paper>
+
+      <ModulePresetManager
+        moduleKey="randomizer"
+        title="Custom Presets"
+        captureData={capturePreset}
+        onApplyPreset={applyPreset}
+      />
 
       <Snackbar open={!!snack} autoHideDuration={5000} onClose={() => setSnack(null)} anchorOrigin={{ vertical: 'top', horizontal: 'center' }}>
         <Alert severity={snack?.type} onClose={() => setSnack(null)}>{snack?.msg}</Alert>

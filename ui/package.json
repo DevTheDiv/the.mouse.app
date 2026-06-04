@@ -1,6 +1,6 @@
 {
   "name": "themouse-app",
-  "version": "1.3.3",
+  "version": "1.4.0",
   "description": "TheMouse.app",
   "author": "DevTheDiv",
   "main": "electron.cjs",
@@ -24,7 +24,8 @@
       "dist/**/*",
       "electron.cjs",
       "preload.cjs",
-      "assets/**/*"
+      "assets/**/*",
+      "build/icon.png"
     ],
     "extraResources": [
       {

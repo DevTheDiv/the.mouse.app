@@ -10,6 +10,7 @@ import {
   CallSplit, Merge
 } from '@mui/icons-material';
 import { useSettings } from '../context/SettingsContext';
+import ModulePresetManager from '../components/ModulePresetManager';
 
 const SVG_W  = 620;
 const SVG_H  = 320;
@@ -464,6 +465,41 @@ export default function AccelCurve() {
     setPointsY(applied.ptsY.map(([x,y,t]) => ({ id: nextId.current++, x, y, type: t })));
   }, [applied]);
 
+  const capturePreset = useCallback(() => ({
+    enabled,
+    multiCurve,
+    maxSpeed,
+    pointsX: sortedX.map((p) => [p.x, p.y, p.type]),
+    pointsY: sortedY.map((p) => [p.x, p.y, p.type]),
+  }), [enabled, multiCurve, maxSpeed, sortedX, sortedY]);
+
+  const applyPreset = useCallback((payload) => {
+    if (!payload) return;
+    const ms = Number(payload.maxSpeed || DEFAULT_MAX_SPEED);
+    const mc = !!payload.multiCurve;
+    const pxRaw = Array.isArray(payload.pointsX) ? payload.pointsX : [];
+    const pyRaw = Array.isArray(payload.pointsY) ? payload.pointsY : pxRaw;
+
+    const toPts = (arr) => arr
+      .map((p) => ({
+        id: nextId.current++,
+        x: Number(p?.[0] ?? 0),
+        y: Number(p?.[1] ?? 1),
+        type: p?.[2] === 'corner' || p?.[2] === 'jump' ? p[2] : 'smooth',
+      }))
+      .sort((a, b) => a.x - b.x);
+
+    const px = toPts(pxRaw.length ? pxRaw : [[0, 1, 'smooth'], [ms, 1, 'smooth']]);
+    const py = toPts(pyRaw.length ? pyRaw : pxRaw);
+
+    setEnabled(payload.enabled !== undefined ? !!payload.enabled : true);
+    setMultiCurve(mc);
+    setMaxSpeed(ms);
+    setView((v) => ({ ...v, x0: 0, x1: ms }));
+    setPointsX(px);
+    setPointsY(py);
+  }, []);
+
   if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', pt: 8 }}><CircularProgress /></Box>;
 
   const cursor = dragInfo ? 'grabbing' : isPanning ? 'move'
@@ -674,6 +710,14 @@ export default function AccelCurve() {
           <Typography variant="caption" color="text.secondary">Double-click point to cycle type · Right-click to delete</Typography>
         </Box>
       </Paper>
+
+      <ModulePresetManager
+        moduleKey="accel"
+        title="Custom Presets"
+        captureData={capturePreset}
+        onApplyPreset={applyPreset}
+        disabled={!enabled}
+      />
 
       <Fade in={isDirty || saving}>
         <Paper elevation={12} sx={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', p: 1.5, borderRadius: 3, display: 'flex', gap: 1.5, bgcolor: 'background.paper', border: '1px solid', borderColor: 'primary.main', zIndex: 1000 }}>

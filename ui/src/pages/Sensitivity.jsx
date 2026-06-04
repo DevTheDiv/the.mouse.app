@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Box, Typography, Paper, Button, Slider, Switch, CircularProgress, IconButton } from '@mui/material';
 import { Link, LinkOff } from '@mui/icons-material';
 import { useSettings } from '../context/SettingsContext';
+import ModulePresetManager from '../components/ModulePresetManager';
 
 function SliderRow({ label, hint, value, onChange, min, max, step, disabled }) {
   return (
@@ -56,6 +57,21 @@ export default function Sensitivity() {
       set('Y_Sensitivity', s.X_Sensitivity);
     }
     setLocked(!locked);
+  };
+
+  const capturePreset = () => ({
+    XY_Enabled: !!s.XY_Enabled,
+    X_Sensitivity: Number(s.X_Sensitivity),
+    Y_Sensitivity: Number(s.Y_Sensitivity),
+    locked,
+  });
+
+  const applyPreset = (payload) => {
+    if (!payload) return;
+    if (payload.XY_Enabled !== undefined) set('XY_Enabled', !!payload.XY_Enabled);
+    if (payload.X_Sensitivity !== undefined) set('X_Sensitivity', Number(payload.X_Sensitivity));
+    if (payload.Y_Sensitivity !== undefined) set('Y_Sensitivity', Number(payload.Y_Sensitivity));
+    if (payload.locked !== undefined) setLocked(!!payload.locked);
   };
 
   if (!s || settingsLoading) return (
@@ -161,6 +177,13 @@ export default function Sensitivity() {
           </Box>
         </Paper>
       )}
+
+      <ModulePresetManager
+        moduleKey="sensitivity"
+        title="Custom Presets"
+        captureData={capturePreset}
+        onApplyPreset={applyPreset}
+      />
     </Box>
   );
 }

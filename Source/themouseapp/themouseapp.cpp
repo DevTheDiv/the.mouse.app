@@ -160,7 +160,7 @@ bool readSettings(const string& path)
             else if (name == "Angle_Enabled")        ANGLE_ENABLED      = (bool)val;
             else if (name == "Angle_Value")          ANGLE_VALUE        = val;
             else if (name == "Snap_Enabled")         SNAP_ENABLED       = (bool)val;
-            else if (name == "Snap_Threshold")      SNAP_THRESHOLD     = val;
+            else if (name == "Snap_Threshold")       SNAP_THRESHOLD     = val;
             else if (name == "Mouse_DPI")            MOUSE_DPI          = val > 0 ? val : 800;
             else {
                 if (DEBUG) printf("Unknown setting: %s\n", name.c_str());
@@ -444,7 +444,8 @@ int main(int argc, char* argv[])
                SENS_SPREAD, SMOOTH_AMT, TIMESTEP_MEAN, DEBUG,
                RANDOMIZER_ENABLED, XY_ENABLED, X_RATIO, Y_RATIO,
                ACCEL_ENABLED, ACCEL_MULTI, ACCEL_MAX_SPEED,
-               SNAP_ENABLED, SNAP_THRESHOLD, MOUSE_DPI);
+               SNAP_ENABLED, SNAP_THRESHOLD,
+               MOUSE_DPI);
         SetConsoleTextAttribute(hConsole, 0x08);
 
         if (garbage) {
@@ -684,18 +685,29 @@ int main(int argc, char* argv[])
                 // 2. Accel curve lookup: speed in mm/s = counts/ms * 25400 / DPI
                 double speed_x = abs((double)ms.x) * 25400.0 / (dt_ms * MOUSE_DPI);
                 double speed_y = abs((double)ms.y) * 25400.0 / (dt_ms * MOUSE_DPI);
+                double shared_speed = sqrt(speed_x * speed_x + speed_y * speed_y);
                 double accel_mult_x = 1.0, accel_mult_y = 1.0;
 
                 if (ACCEL_ENABLED) {
-                    int idx_x = (int)(speed_x / ACCEL_MAX_SPEED * ACCEL_LUT_SIZE);
-                    if (idx_x < 0) idx_x = 0;
-                    if (idx_x >= ACCEL_LUT_SIZE) idx_x = ACCEL_LUT_SIZE - 1;
-                    accel_mult_x = ACCEL_LUT_X[idx_x];
+                    if (ACCEL_MULTI) {
+                        int idx_x = (int)(speed_x / ACCEL_MAX_SPEED * ACCEL_LUT_SIZE);
+                        if (idx_x < 0) idx_x = 0;
+                        if (idx_x >= ACCEL_LUT_SIZE) idx_x = ACCEL_LUT_SIZE - 1;
+                        accel_mult_x = ACCEL_LUT_X[idx_x];
 
-                    int idx_y = (int)(speed_y / ACCEL_MAX_SPEED * ACCEL_LUT_SIZE);
-                    if (idx_y < 0) idx_y = 0;
-                    if (idx_y >= ACCEL_LUT_SIZE) idx_y = ACCEL_LUT_SIZE - 1;
-                    accel_mult_y = ACCEL_LUT_Y[idx_y];
+                        int idx_y = (int)(speed_y / ACCEL_MAX_SPEED * ACCEL_LUT_SIZE);
+                        if (idx_y < 0) idx_y = 0;
+                        if (idx_y >= ACCEL_LUT_SIZE) idx_y = ACCEL_LUT_SIZE - 1;
+                        accel_mult_y = ACCEL_LUT_Y[idx_y];
+                    } else {
+                        int idx = (int)(shared_speed / ACCEL_MAX_SPEED * ACCEL_LUT_SIZE);
+                        if (idx < 0) idx = 0;
+                        if (idx >= ACCEL_LUT_SIZE) idx = ACCEL_LUT_SIZE - 1;
+                        accel_mult_x = ACCEL_LUT_X[idx];
+                        accel_mult_y = ACCEL_LUT_Y[idx];
+                        speed_x = shared_speed;
+                        speed_y = shared_speed;
+                    }
                 }
 
                 // 3. Apply XY Ratios + accel
@@ -715,21 +727,33 @@ int main(int argc, char* argv[])
                     double snapped = angle_deg;
                     bool should_snap = false;
 
-                    if (abs(angle_deg - 0.0) < SNAP_THRESHOLD || abs(angle_deg - 360.0) < SNAP_THRESHOLD) {
+                    if (fabs(angle_deg - 0.0) < SNAP_THRESHOLD || fabs(angle_deg - 360.0) < SNAP_THRESHOLD) {
                         snapped = 0.0; should_snap = true;
-                    } else if (abs(angle_deg - 90.0) < SNAP_THRESHOLD) {
+                    } else if (fabs(angle_deg - 90.0) < SNAP_THRESHOLD) {
                         snapped = 90.0; should_snap = true;
-                    } else if (abs(angle_deg - 180.0) < SNAP_THRESHOLD) {
+                    } else if (fabs(angle_deg - 180.0) < SNAP_THRESHOLD) {
                         snapped = 180.0; should_snap = true;
-                    } else if (abs(angle_deg - 270.0) < SNAP_THRESHOLD) {
+                    } else if (fabs(angle_deg - 270.0) < SNAP_THRESHOLD) {
                         snapped = 270.0; should_snap = true;
                     }
 
                     if (should_snap) {
                         double mag = sqrt(dx * dx + dy * dy);
-                        double sn_rad = snapped * (3.14159265358979323846 / 180.0);
-                        dx = cos(sn_rad) * mag;
-                        dy = sin(sn_rad) * mag;
+                        // Hard-lock to axis to avoid floating-point residue from cos/sin(90/270)
+                        // creating a persistent one-count lateral drift after flooring.
+                        if (snapped == 0.0) {
+                            dx = mag;
+                            dy = 0.0;
+                        } else if (snapped == 180.0) {
+                            dx = -mag;
+                            dy = 0.0;
+                        } else if (snapped == 90.0) {
+                            dx = 0.0;
+                            dy = mag;
+                        } else { // 270.0
+                            dx = 0.0;
+                            dy = -mag;
+                        }
                     }
                 }
 

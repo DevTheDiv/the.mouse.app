@@ -4,6 +4,7 @@ import { Box, IconButton, Typography, Tooltip } from '@mui/material';
 import {
   Dashboard as DashboardIcon,
   Settings as SettingsIcon,
+  FolderOpen,
   Close as CloseIcon,
   Remove as MinimizeIcon,
   CropSquare as MaximizeIcon,
@@ -12,6 +13,7 @@ import {
   ShowChart,
   Rotate90DegreesCcw,
   AlignHorizontalLeft,
+  AutoAwesome,
 } from '@mui/icons-material';
 import Dashboard     from './pages/Dashboard';
 import SensRandomizer from './pages/SensRandomizer';
@@ -20,6 +22,8 @@ import AngleCorrection from './pages/AngleCorrection';
 import Snap           from './pages/Snap';
 import Settings      from './pages/Settings';
 import AccelCurve    from './pages/AccelCurve';
+import Extra         from './pages/Extra';
+import Profiles      from './pages/Profiles';
 import { SettingsProvider } from './context/SettingsContext';
 import FloatingActionBar from './components/FloatingActionBar';
 
@@ -65,10 +69,12 @@ const NAV_TOP = [
   { path: '/snap',        label: 'Snap',        Icon: AlignHorizontalLeft },
   { path: '/angle',       label: 'Angle',        Icon: Rotate90DegreesCcw },
   { path: '/accel',       label: 'Accel',       Icon: ShowChart     },
+  { path: '/extra',       label: 'Extra',       Icon: AutoAwesome   },
   { path: '/randomizer',  label: 'Randomizer',   Icon: Mouse         },
 ];
 
 const NAV_BOTTOM = [
+  { path: '/profiles',    label: 'Profiles',    Icon: FolderOpen    },
   { path: '/settings',    label: 'Settings',    Icon: SettingsIcon  },
 ];
 
@@ -138,6 +144,8 @@ export default function App() {
                 <Route path="/angle"       element={<AngleCorrection />} />
                 <Route path="/randomizer"  element={<SensRandomizer />} />
                 <Route path="/accel"       element={<AccelCurve />}     />
+                <Route path="/extra"       element={<Extra />}         />
+                <Route path="/profiles"    element={<Profiles />}      />
                 <Route path="/settings"    element={<Settings />}       />
               </Routes>
             </Box>

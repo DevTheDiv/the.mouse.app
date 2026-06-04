@@ -1,10 +1,11 @@
 'use strict';
 const {
-  app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, dialog, globalShortcut,
+  app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, dialog, globalShortcut, shell, screen,
 } = require('electron');
 const path  = require('path');
 const fs    = require('fs');
 const zlib  = require('zlib');
+const https = require('https');
 const { spawn, execSync } = require('child_process');
 
 app.name = 'TheMouse.app';
@@ -20,6 +21,111 @@ const APP_DIR = isDev
 
 const MAIN_EXE      = path.join(APP_DIR, 'themouseapp.exe');
 const INSTALLER_EXE = path.join(APP_DIR, 'install-interception.exe');
+const GITHUB_REPO = process.env.THEMOUSE_GITHUB_REPO || 'DevTheDiv/the.mouse.app';
+const PROFILES_SCHEMA_VERSION = 1;
+const DEFAULT_PROFILE_PREV_HOTKEY = 'Alt+Shift+Left';
+const DEFAULT_PROFILE_NEXT_HOTKEY = 'Alt+Shift+Right';
+let startupUpdateNoticeShownFor = null;
+
+function parseSemverLike(input) {
+  const m = String(input || '').trim().match(/v?(\d+)\.(\d+)\.(\d+)/i);
+  if (!m) return null;
+  return {
+    major: parseInt(m[1], 10),
+    minor: parseInt(m[2], 10),
+    patch: parseInt(m[3], 10),
+  };
+}
+
+function compareSemverLike(a, b) {
+  if (a.major !== b.major) return a.major > b.major ? 1 : -1;
+  if (a.minor !== b.minor) return a.minor > b.minor ? 1 : -1;
+  if (a.patch !== b.patch) return a.patch > b.patch ? 1 : -1;
+  return 0;
+}
+
+function fetchJson(url) {
+  return new Promise((resolve, reject) => {
+    const req = https.get(url, {
+      headers: {
+        'User-Agent': `TheMouse.app/${app.getVersion()}`,
+        Accept: 'application/vnd.github+json',
+      },
+    }, (res) => {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        res.resume();
+        fetchJson(res.headers.location).then(resolve).catch(reject);
+        return;
+      }
+
+      let raw = '';
+      res.setEncoding('utf8');
+      res.on('data', (chunk) => { raw += chunk; });
+      res.on('end', () => {
+        if (res.statusCode < 200 || res.statusCode >= 300) {
+          reject(new Error(`Update check failed (${res.statusCode})`));
+          return;
+        }
+
+        try {
+          resolve(JSON.parse(raw));
+        } catch {
+          reject(new Error('Invalid release response from GitHub'));
+        }
+      });
+    });
+
+    req.setTimeout(10000, () => req.destroy(new Error('Update check timed out')));
+    req.on('error', reject);
+  });
+}
+
+async function getLatestReleaseInfo() {
+  const currentVersion = app.getVersion();
+  const api = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
+  const release = await fetchJson(api);
+
+  const tag = String(release?.tag_name || release?.name || '').trim();
+  const latestVersion = tag.replace(/^v/i, '');
+  const releaseUrl = String(release?.html_url || `https://github.com/${GITHUB_REPO}/releases`);
+  const exeAsset = Array.isArray(release?.assets)
+    ? release.assets.find((a) => /\.exe$/i.test(String(a?.name || '')))
+    : null;
+  const downloadUrl = exeAsset?.browser_download_url || releaseUrl;
+
+  const parsedCurrent = parseSemverLike(currentVersion);
+  const parsedLatest = parseSemverLike(latestVersion);
+  const updateAvailable = parsedCurrent && parsedLatest
+    ? compareSemverLike(parsedLatest, parsedCurrent) > 0
+    : latestVersion && latestVersion !== currentVersion;
+
+  return {
+    currentVersion,
+    latestVersion,
+    latestTag: tag,
+    releaseName: String(release?.name || ''),
+    releaseUrl,
+    downloadUrl,
+    publishedAt: String(release?.published_at || ''),
+    repo: GITHUB_REPO,
+    updateAvailable,
+  };
+}
+
+async function checkForStartupUpdate() {
+  if (isDev) return;
+
+  try {
+    const info = await getLatestReleaseInfo();
+    if (!info?.updateAvailable) return;
+    if (startupUpdateNoticeShownFor === info.latestVersion) return;
+
+    startupUpdateNoticeShownFor = info.latestVersion;
+    showAppNotification('Update Available', `Version ${info.latestVersion} is available to download.`);
+  } catch (e) {
+    console.error('Startup update check failed', e);
+  }
+}
 
 // In packaged builds, write settings to userData so they survive updates
 // and are always writable regardless of install location.
@@ -34,6 +140,357 @@ function getSettingsPath() {
     if (fs.existsSync(src)) fs.copyFileSync(src, dest);
   }
   return dest;
+}
+
+function getProfilesPath() {
+  const dir = app.getPath('userData');
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  return path.join(dir, 'profiles.json');
+}
+
+function defaultProfilesStore() {
+  return {
+    schemaVersion: PROFILES_SCHEMA_VERSION,
+    activeProfileId: null,
+    profiles: [],
+    presets: [],
+  };
+}
+
+function readProfilesStore() {
+  const p = getProfilesPath();
+  if (!fs.existsSync(p)) return null;
+  try {
+    const raw = JSON.parse(fs.readFileSync(p, 'utf8'));
+    return {
+      schemaVersion: raw?.schemaVersion || PROFILES_SCHEMA_VERSION,
+      activeProfileId: raw?.activeProfileId || null,
+      profiles: Array.isArray(raw?.profiles) ? raw.profiles : [],
+      presets: Array.isArray(raw?.presets) ? raw.presets : [],
+    };
+  } catch (e) {
+    console.error('Failed to parse profiles store', e);
+    return null;
+  }
+}
+
+function writeProfilesStore(store) {
+  try {
+    fs.writeFileSync(getProfilesPath(), JSON.stringify(store, null, 2), 'utf8');
+    return true;
+  } catch (e) {
+    console.error('Failed to write profiles store', e);
+    return false;
+  }
+}
+
+function readAccelCurveFile() {
+  const p = getAccelCurvePath();
+  if (!fs.existsSync(p)) return null;
+  try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch { return null; }
+}
+
+function writeAccelCurveFile(curve) {
+  fs.writeFileSync(getAccelCurvePath(), JSON.stringify(curve, null, 2), 'utf8');
+  writeAccelLut(curve.enabled, curve.multiCurve, curve.maxSpeed, curve.lutX, curve.lutY);
+}
+
+function createProfileFromRuntime(name = 'Default') {
+  const now = new Date().toISOString();
+  return {
+    id: `profile-${Date.now()}`,
+    name,
+    createdAt: now,
+    updatedAt: now,
+    settings: readSettings(),
+    accelCurve: readAccelCurveFile(),
+    source: 'migrated_from_ini',
+  };
+}
+
+function ensureProfilesStore() {
+  let store = readProfilesStore() || defaultProfilesStore();
+
+  if (!Array.isArray(store.profiles) || store.profiles.length === 0) {
+    const migrated = createProfileFromRuntime('Default');
+    store.profiles = [migrated];
+    store.activeProfileId = migrated.id;
+    store.schemaVersion = PROFILES_SCHEMA_VERSION;
+    writeProfilesStore(store);
+    return store;
+  }
+
+  if (!store.activeProfileId || !store.profiles.find((p) => p.id === store.activeProfileId)) {
+    store.activeProfileId = store.profiles[0].id;
+  }
+
+  if (!Array.isArray(store.presets)) store.presets = [];
+  if (!store.schemaVersion) store.schemaVersion = PROFILES_SCHEMA_VERSION;
+  writeProfilesStore(store);
+  return store;
+}
+
+function getActiveProfile(store) {
+  if (!store || !Array.isArray(store.profiles) || store.profiles.length === 0) return null;
+  return store.profiles.find((p) => p.id === store.activeProfileId) || store.profiles[0];
+}
+
+function listModulePresets(moduleKey) {
+  const store = ensureProfilesStore();
+  return (store.presets || []).filter((p) => p.module === moduleKey);
+}
+
+function saveModulePreset(moduleKey, name, payload) {
+  const store = ensureProfilesStore();
+  const now = new Date().toISOString();
+  const preset = {
+    id: `preset-${Date.now()}`,
+    module: moduleKey,
+    name: String(name || '').trim() || 'Untitled Preset',
+    payload,
+    createdAt: now,
+    updatedAt: now,
+  };
+  store.presets.push(preset);
+  writeProfilesStore(store);
+  return preset;
+}
+
+function deleteModulePreset(moduleKey, presetId) {
+  const store = ensureProfilesStore();
+  const before = store.presets.length;
+  store.presets = store.presets.filter((p) => !(p.module === moduleKey && p.id === presetId));
+  if (store.presets.length === before) return false;
+  writeProfilesStore(store);
+  return true;
+}
+
+function isNotificationsEnabled() {
+  const store = ensureProfilesStore();
+  const active = getActiveProfile(store);
+  const raw = active?.settings?.Notifications_Enabled;
+  if (raw === undefined || raw === null || raw === '') return true;
+  if (typeof raw === 'boolean') return raw;
+  return String(raw) !== '0';
+}
+
+function escapeHtml(input) {
+  return String(input || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+let noticeWindow = null;
+let noticeCloseTimer = null;
+
+function showAppNotification(title, body) {
+  if (!isNotificationsEnabled()) return;
+
+  if (noticeCloseTimer) {
+    clearTimeout(noticeCloseTimer);
+    noticeCloseTimer = null;
+  }
+
+  if (noticeWindow && !noticeWindow.isDestroyed()) {
+    noticeWindow.close();
+    noticeWindow = null;
+  }
+
+  const safeTitle = escapeHtml(title || 'Notice');
+  const safeBody = escapeHtml(body || '');
+  const html = `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <style>
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      background: transparent;
+      overflow: hidden;
+      font-family: "Segoe UI", "Inter", sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    .wrap {
+      box-sizing: border-box;
+      width: 100%;
+      height: 100%;
+      border-radius: 12px;
+      border: 1px solid rgba(0, 229, 255, 0.28);
+      background: rgba(8, 13, 18, 0.94);
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.42);
+      padding: 11px 13px;
+      animation: enter 170ms ease-out;
+    }
+    .title {
+      color: #00e5ff;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.78px;
+      font-weight: 700;
+      margin-bottom: 4px;
+      line-height: 1;
+    }
+    .body {
+      color: #d7e7ed;
+      font-size: 13px;
+      line-height: 1.34;
+      white-space: normal;
+      word-wrap: break-word;
+    }
+    @keyframes enter {
+      from { opacity: 0; transform: translateY(-6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="title">${safeTitle}</div>
+    <div class="body">${safeBody}</div>
+  </div>
+</body>
+</html>`;
+
+  const wnd = new BrowserWindow({
+    width: 320,
+    height: 92,
+    frame: false,
+    show: false,
+    resizable: false,
+    movable: false,
+    minimizable: false,
+    maximizable: false,
+    closable: true,
+    focusable: false,
+    skipTaskbar: true,
+    transparent: true,
+    hasShadow: false,
+    alwaysOnTop: true,
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  });
+  noticeWindow = wnd;
+
+  wnd.setAlwaysOnTop(true, 'screen-saver');
+  wnd.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  wnd.setIgnoreMouseEvents(true);
+
+  wnd.once('ready-to-show', () => {
+    const display = screen.getPrimaryDisplay();
+    const { x, y, width } = display.workArea;
+    const margin = 14;
+    const nx = Math.round(x + width - 320 - margin);
+    const ny = Math.round(y + margin);
+    if (!wnd.isDestroyed()) {
+      wnd.setPosition(nx, ny, false);
+      wnd.showInactive();
+    }
+  });
+
+  wnd.on('closed', () => {
+    if (noticeWindow === wnd) {
+      noticeWindow = null;
+    }
+  });
+
+  wnd.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+
+  noticeCloseTimer = setTimeout(() => {
+    if (!wnd.isDestroyed()) wnd.close();
+    if (noticeWindow === wnd) {
+      noticeWindow = null;
+    }
+    noticeCloseTimer = null;
+  }, 2600);
+}
+
+function emitProfileChanged(profile) {
+  mainWindow?.webContents.send('profile-changed', {
+    activeProfileId: profile?.id || null,
+    name: profile?.name || '',
+  });
+}
+
+async function restartAppIfRunningInternal() {
+  if (processStatus === 'running') {
+    stopApp({ notify: false });
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    startApp({ notify: false });
+  }
+}
+
+async function switchActiveProfile(profileId, options = {}) {
+  const { notify = true, restartIfRunning = false } = options;
+  const store = ensureProfilesStore();
+  const profile = store.profiles.find((p) => p.id === profileId);
+  if (!profile) {
+    return { success: false, error: 'Profile not found' };
+  }
+
+  store.activeProfileId = profileId;
+  writeProfilesStore(store);
+  syncActiveProfileToRuntime();
+  setTimeout(() => {
+    try {
+      refreshShortcuts();
+    } catch (e) {
+      console.error('Failed to refresh shortcuts after profile switch', e);
+    }
+  }, 0);
+
+  if (restartIfRunning) {
+    await restartAppIfRunningInternal();
+  }
+
+  emitProfileChanged(profile);
+  if (notify) {
+    showAppNotification('Profile Switched', `Active profile: ${profile.name || 'Unknown'}`);
+  }
+
+  return { success: true, activeProfileId: profile.id };
+}
+
+async function cycleProfile(direction) {
+  const store = ensureProfilesStore();
+  if (!Array.isArray(store.profiles) || store.profiles.length < 2) return;
+
+  const currentIndex = Math.max(0, store.profiles.findIndex((p) => p.id === store.activeProfileId));
+  const nextIndex = (currentIndex + direction + store.profiles.length) % store.profiles.length;
+  const nextProfile = store.profiles[nextIndex];
+  if (!nextProfile || nextProfile.id === store.activeProfileId) return;
+
+  await switchActiveProfile(nextProfile.id, { notify: true, restartIfRunning: true });
+}
+
+function syncActiveProfileToRuntime() {
+  const store = ensureProfilesStore();
+  const active = getActiveProfile(store);
+  if (!active) return false;
+
+  writeSettings(active.settings || {});
+
+  try {
+    if (active.accelCurve) {
+      writeAccelCurveFile(active.accelCurve);
+    } else {
+      const curvePath = getAccelCurvePath();
+      const lutPath = getAccelLutPath();
+      if (fs.existsSync(curvePath)) fs.unlinkSync(curvePath);
+      if (fs.existsSync(lutPath)) fs.unlinkSync(lutPath);
+    }
+  } catch (e) {
+    console.error('Failed to sync accel data for active profile', e);
+  }
+
+  return true;
 }
 
 let mainWindow    = null;
@@ -259,18 +716,26 @@ function runElevated(flag) {
 }
 
 /* ── process management ────────────────────────────────────────── */
-function startApp() {
+function startApp(options = {}) {
+  const { notify = true } = options;
+  syncActiveProfileToRuntime();
+
   if (childProcess) return;
   if (!fs.existsSync(MAIN_EXE)) {
     mainWindow?.webContents.send('app-error', `Executable not found:\n${MAIN_EXE}`);
     return;
   }
 
-  // Persist state
+  // Persist state to active profile and runtime projection
   try {
-    const s = readSettings();
-    s.Running = '1';
-    writeSettings(s);
+    const store = ensureProfilesStore();
+    const active = getActiveProfile(store);
+    if (active) {
+      active.settings = { ...(active.settings || {}), Running: '1' };
+      active.updatedAt = new Date().toISOString();
+      writeProfilesStore(store);
+      syncActiveProfileToRuntime();
+    }
   } catch (e) { console.error('Failed to save running state', e); }
 
   // Kill any zombie instances first
@@ -318,22 +783,30 @@ function startApp() {
     updateTrayMenu();
   });
   mainWindow?.webContents.send('process-status', { status: 'running', startTime });
+  if (notify) showAppNotification('Engine Active', 'TheMouse engine is now running.');
   updateTrayMenu();
 }
 
-function stopApp() {
+function stopApp(options = {}) {
+  const { notify = true } = options;
   if (!childProcess) return;
 
-  // Persist state
+  // Persist state to active profile and runtime projection
   try {
-    const s = readSettings();
-    s.Running = '0';
-    writeSettings(s);
+    const store = ensureProfilesStore();
+    const active = getActiveProfile(store);
+    if (active) {
+      active.settings = { ...(active.settings || {}), Running: '0' };
+      active.updatedAt = new Date().toISOString();
+      writeProfilesStore(store);
+      syncActiveProfileToRuntime();
+    }
   } catch (e) { console.error('Failed to save stopped state', e); }
 
   childProcess.kill();
   childProcess = null; processStatus = 'stopped'; startTime = null;
   mainWindow?.webContents.send('process-status', { status: 'stopped' });
+  if (notify) showAppNotification('Engine Inactive', 'TheMouse engine has stopped.');
   updateTrayMenu();
 }
 
@@ -356,10 +829,23 @@ function updateTrayMenu() {
 
 async function createTray() {
   let icon;
+
+  const trayIconPath = path.join(__dirname, 'build', 'icon.png');
+  if (fs.existsSync(trayIconPath)) {
+    const img = nativeImage.createFromPath(trayIconPath);
+    if (!img.isEmpty()) {
+      icon = img.resize({ width: 16, height: 16, quality: 'best' });
+    }
+  }
+
   try {
-    icon = await app.getFileIcon(MAIN_EXE, { size: 'small' });
+    if (!icon) {
+      icon = await app.getFileIcon(MAIN_EXE, { size: 'small' });
+    }
   } catch {
-    icon = nativeImage.createFromBuffer(makePNG(32, 0, 229, 255));
+    if (!icon) {
+      icon = nativeImage.createFromBuffer(makePNG(32, 0, 229, 255));
+    }
   }
   if (icon.isEmpty()) icon = nativeImage.createFromBuffer(makePNG(32, 0, 229, 255));
 
@@ -410,10 +896,21 @@ function createWindow() {
 
 /* ── IPC ───────────────────────────────────────────────────────── */
 function setupIPC() {
-  ipcMain.handle('get-settings', () => readSettings());
+  ipcMain.handle('get-settings', () => {
+    const store = ensureProfilesStore();
+    const active = getActiveProfile(store);
+    return active?.settings || readSettings();
+  });
 
   ipcMain.handle('save-settings', (_, settings) => {
-    writeSettings({ ...readSettings(), ...settings });
+    const store = ensureProfilesStore();
+    const active = getActiveProfile(store);
+    if (!active) return false;
+
+    active.settings = { ...(active.settings || {}), ...settings };
+    active.updatedAt = new Date().toISOString();
+    writeProfilesStore(store);
+    syncActiveProfileToRuntime();
     refreshShortcuts();
     return true;
   });
@@ -423,19 +920,13 @@ function setupIPC() {
     startTime,
     driverStatus: getDriverStatus(),
     autoStart: app.getLoginItemSettings().openAtLogin,
+    activeProfileId: ensureProfilesStore().activeProfileId,
   }));
 
   ipcMain.handle('start-app',  () => startApp());
   ipcMain.handle('stop-app',   () => stopApp());
 
-  ipcMain.handle('restart-app-if-running', async () => {
-    if (processStatus === 'running') {
-      stopApp();
-      // Small delay to ensure process cleanup
-      await new Promise(r => setTimeout(r, 500));
-      startApp();
-    }
-  });
+  ipcMain.handle('restart-app-if-running', async () => restartAppIfRunningInternal());
 
   ipcMain.handle('toggle-pause', () => {
     if (childProcess) {
@@ -461,15 +952,124 @@ function setupIPC() {
   ipcMain.handle('get-driver-status', () => getDriverStatus());
 
   ipcMain.handle('get-accel-curve', () => {
-    const p = getAccelCurvePath();
-    if (!fs.existsSync(p)) return null;
-    try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch { return null; }
+    const store = ensureProfilesStore();
+    const active = getActiveProfile(store);
+    return active?.accelCurve || null;
   });
 
   ipcMain.handle('save-accel-curve', (_, curve) => {
-    fs.writeFileSync(getAccelCurvePath(), JSON.stringify(curve, null, 2), 'utf8');
-    writeAccelLut(curve.enabled, curve.multiCurve, curve.maxSpeed, curve.lutX, curve.lutY);
+    const store = ensureProfilesStore();
+    const active = getActiveProfile(store);
+    if (!active) return false;
+
+    active.accelCurve = curve;
+    active.updatedAt = new Date().toISOString();
+    writeProfilesStore(store);
+    syncActiveProfileToRuntime();
     return true;
+  });
+
+  ipcMain.handle('get-profiles', () => {
+    const store = ensureProfilesStore();
+    return {
+      activeProfileId: store.activeProfileId,
+      profiles: store.profiles.map((p) => ({
+        id: p.id,
+        name: p.name,
+        createdAt: p.createdAt,
+        updatedAt: p.updatedAt,
+      })),
+    };
+  });
+
+  ipcMain.handle('create-profile', (_, payload) => {
+    const store = ensureProfilesStore();
+    const active = getActiveProfile(store);
+    const now = new Date().toISOString();
+    const newProfile = {
+      id: `profile-${Date.now()}`,
+      name: String(payload?.name || 'New Profile').trim() || 'New Profile',
+      createdAt: now,
+      updatedAt: now,
+      settings: JSON.parse(JSON.stringify(active?.settings || readSettings())),
+      accelCurve: active?.accelCurve ? JSON.parse(JSON.stringify(active.accelCurve)) : null,
+      source: 'user_created',
+    };
+    store.profiles.push(newProfile);
+    store.activeProfileId = newProfile.id;
+    writeProfilesStore(store);
+    syncActiveProfileToRuntime();
+    refreshShortcuts();
+    return { success: true, activeProfileId: newProfile.id };
+  });
+
+  ipcMain.handle('set-active-profile', async (_, profileId) => switchActiveProfile(profileId));
+
+  ipcMain.handle('delete-profile', (_, profileId) => {
+    const store = ensureProfilesStore();
+    const profiles = Array.isArray(store.profiles) ? store.profiles : [];
+    if (profiles.length <= 1) {
+      return { success: false, error: 'At least one profile must remain.' };
+    }
+
+    const index = profiles.findIndex((p) => p.id === profileId);
+    if (index === -1) {
+      return { success: false, error: 'Profile not found' };
+    }
+
+    const deletedProfile = profiles[index];
+    const deletedActive = store.activeProfileId === profileId;
+    store.profiles = profiles.filter((p) => p.id !== profileId);
+
+    let nextActiveProfile = getActiveProfile(store);
+    if (deletedActive) {
+      const fallbackIndex = Math.min(index, store.profiles.length - 1);
+      nextActiveProfile = store.profiles[fallbackIndex] || store.profiles[0] || null;
+      store.activeProfileId = nextActiveProfile?.id || null;
+    }
+
+    writeProfilesStore(store);
+
+    if (deletedActive && nextActiveProfile) {
+      syncActiveProfileToRuntime();
+      setTimeout(() => {
+        try {
+          refreshShortcuts();
+        } catch (e) {
+          console.error('Failed to refresh shortcuts after profile deletion', e);
+        }
+      }, 0);
+      emitProfileChanged(nextActiveProfile);
+    }
+
+    return {
+      success: true,
+      deletedActive,
+      deletedProfileId: deletedProfile.id,
+      deletedProfileName: deletedProfile.name,
+      activeProfileId: store.activeProfileId,
+    };
+  });
+
+  ipcMain.handle('get-module-presets', (_, moduleKey) => {
+    if (typeof moduleKey !== 'string' || !moduleKey.trim()) return [];
+    return listModulePresets(moduleKey.trim());
+  });
+
+  ipcMain.handle('save-module-preset', (_, payload) => {
+    const moduleKey = String(payload?.module || '').trim();
+    const name = String(payload?.name || '').trim();
+    if (!moduleKey || !name) return { success: false, error: 'Missing module or preset name' };
+    const preset = saveModulePreset(moduleKey, name, payload?.data ?? {});
+    return { success: true, preset };
+  });
+
+  ipcMain.handle('delete-module-preset', (_, payload) => {
+    const moduleKey = String(payload?.module || '').trim();
+    const presetId = String(payload?.id || '').trim();
+    if (!moduleKey || !presetId) return { success: false, error: 'Missing module or preset id' };
+    const ok = deleteModulePreset(moduleKey, presetId);
+    return ok ? { success: true } : { success: false, error: 'Preset not found' };
   });
 
   ipcMain.handle('set-autostart', (_, enable) => {
@@ -516,6 +1116,26 @@ function setupIPC() {
     catch { return false; }
   });
 
+  ipcMain.handle('get-update-info', async () => {
+    try {
+      const info = await getLatestReleaseInfo();
+      return { success: true, ...info };
+    } catch (err) {
+      return {
+        success: false,
+        currentVersion: app.getVersion(),
+        repo: GITHUB_REPO,
+        error: err.message || 'Update check failed',
+      };
+    }
+  });
+
+  ipcMain.handle('open-external-url', async (_, url) => {
+    if (typeof url !== 'string' || !/^https?:\/\//i.test(url)) return false;
+    await shell.openExternal(url);
+    return true;
+  });
+
   ipcMain.on('window-minimize', () => mainWindow?.minimize());
   ipcMain.on('window-maximize', () => {
     if (mainWindow?.isMaximized()) mainWindow.unmaximize();
@@ -527,7 +1147,14 @@ function setupIPC() {
 /* ── hotkeys ───────────────────────────────────────────────────── */
 function refreshShortcuts() {
   globalShortcut.unregisterAll();
-  const s = readSettings();
+  const store = ensureProfilesStore();
+  const s = getActiveProfile(store)?.settings || readSettings();
+  const profilePrevHotkey = s.Hotkey_ProfilePrev === undefined || s.Hotkey_ProfilePrev === null
+    ? DEFAULT_PROFILE_PREV_HOTKEY
+    : String(s.Hotkey_ProfilePrev).trim();
+  const profileNextHotkey = s.Hotkey_ProfileNext === undefined || s.Hotkey_ProfileNext === null
+    ? DEFAULT_PROFILE_NEXT_HOTKEY
+    : String(s.Hotkey_ProfileNext).trim();
   
   if (s.Hotkey_StartStop) {
     try {
@@ -545,19 +1172,41 @@ function refreshShortcuts() {
       });
     } catch (e) { console.error('Failed to register pause shortcut', e); }
   }
+
+  if (profilePrevHotkey) {
+    try {
+      globalShortcut.register(profilePrevHotkey, () => {
+        cycleProfile(-1).catch((e) => console.error('Failed to cycle to previous profile', e));
+      });
+    } catch (e) { console.error('Failed to register previous-profile shortcut', e); }
+  }
+
+  if (profileNextHotkey) {
+    try {
+      globalShortcut.register(profileNextHotkey, () => {
+        cycleProfile(1).catch((e) => console.error('Failed to cycle to next profile', e));
+      });
+    } catch (e) { console.error('Failed to register next-profile shortcut', e); }
+  }
 }
 
 /* ── app lifecycle ─────────────────────────────────────────────── */
 app.whenReady().then(async () => {
   migrateSettings();
+  ensureProfilesStore();
+  syncActiveProfileToRuntime();
   createWindow();
   await createTray();
   setupIPC();
   refreshShortcuts();
 
   // If app was running when last closed, resume it
-  const s = readSettings();
+  const s = getActiveProfile(ensureProfilesStore())?.settings || readSettings();
   if (s.Running === '1') startApp();
+
+  setTimeout(() => {
+    checkForStartupUpdate();
+  }, 2000);
 });
 
 app.on('window-all-closed', () => {

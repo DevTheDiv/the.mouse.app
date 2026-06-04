@@ -40,7 +40,10 @@ export default function Settings() {
   const [winAccel,     setWinAccel]     = useState(false);
   const [winSpeed,     setWinSpeed]     = useState(10);
   const [snack,        setSnack]        = useState(null);
-  const [listening,    setListening]    = useState(null); // 'startStop' | 'pause' | null
+  const [listening,    setListening]    = useState(null); // 'startStop' | 'pause' | 'profilePrev' | 'profileNext' | null
+  const [updateInfo,   setUpdateInfo]   = useState(null);
+  const [updateError,  setUpdateError]  = useState('');
+  const [checkingUpd,  setCheckingUpd]  = useState(false);
 
   const refreshDriver = async () => setDriverStatus(await window.api.getDriverStatus());
 
@@ -49,7 +52,36 @@ export default function Settings() {
     window.api.getStatus().then((st) => setAutoStart(!!st.autoStart));
     window.api.getWindowsAccel().then((enabled) => setWinAccel(enabled));
     window.api.getWindowsMouseSpeed().then((val) => setWinSpeed(val));
+    checkForUpdates();
   }, []);
+
+  const checkForUpdates = async () => {
+    setCheckingUpd(true);
+    setUpdateError('');
+    try {
+      const res = await window.api.getUpdateInfo();
+      if (!res?.success) {
+        setUpdateInfo({ currentVersion: res?.currentVersion || 'unknown', updateAvailable: false });
+        setUpdateError(res?.error || 'Could not check for updates.');
+      } else {
+        setUpdateInfo(res);
+      }
+    } catch (e) {
+      setUpdateInfo(null);
+      setUpdateError(e.message || 'Could not check for updates.');
+    } finally {
+      setCheckingUpd(false);
+    }
+  };
+
+  const openLatestRelease = async () => {
+    const url = updateInfo?.downloadUrl || updateInfo?.releaseUrl;
+    if (!url) return;
+    const ok = await window.api.openExternalUrl(url);
+    if (!ok) {
+      setSnack({ type: 'error', msg: 'Could not open release link.' });
+    }
+  };
 
   const handleWinAccel = async (checked) => {
     const ok = await window.api.setWindowsAccel(checked);
@@ -91,7 +123,13 @@ export default function Settings() {
       parts.push(key);
       const combo = parts.join('+');
       
-      updateSetting(listening === 'startStop' ? 'Hotkey_StartStop' : 'Hotkey_Pause', combo);
+      const hotkeyKey = {
+        startStop: 'Hotkey_StartStop',
+        pause: 'Hotkey_Pause',
+        profilePrev: 'Hotkey_ProfilePrev',
+        profileNext: 'Hotkey_ProfileNext',
+      }[listening];
+      if (hotkeyKey) updateSetting(hotkeyKey, combo);
       setListening(null);
     };
     window.addEventListener('keydown', onKey);
@@ -99,7 +137,13 @@ export default function Settings() {
   }, [listening, updateSetting]);
 
   const clearHotkey = (type) => {
-    updateSetting(type === 'startStop' ? 'Hotkey_StartStop' : 'Hotkey_Pause', '');
+    const hotkeyKey = {
+      startStop: 'Hotkey_StartStop',
+      pause: 'Hotkey_Pause',
+      profilePrev: 'Hotkey_ProfilePrev',
+      profileNext: 'Hotkey_ProfileNext',
+    }[type];
+    if (hotkeyKey) updateSetting(hotkeyKey, '');
   };
 
   const act = async (action) => {
@@ -131,6 +175,8 @@ export default function Settings() {
   const hotkeys = {
     startStop: settings.Hotkey_StartStop,
     pause:     settings.Hotkey_Pause,
+    profilePrev: settings.Hotkey_ProfilePrev,
+    profileNext: settings.Hotkey_ProfileNext,
   };
 
   const cfg = DRIVER_STATUS[driverStatus] || { color: 'default', label: driverStatus, Icon: ErrorIcon };
@@ -232,6 +278,56 @@ export default function Settings() {
           </Box>
         </Box>
 
+        <Box sx={{ mt: 4 }}>
+          <Typography variant="subtitle2" sx={{ mb: 1 }}>Previous Profile</Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
+            <Box sx={{
+              px: 2.5, py: 1, borderRadius: 1, border: '1px solid',
+              borderColor: listening === 'profilePrev' ? 'primary.main' : 'rgba(255,255,255,0.15)',
+              bgcolor: listening === 'profilePrev' ? 'rgba(0,229,255,0.08)' : 'rgba(255,255,255,0.03)',
+              minWidth: 160, textAlign: 'center', cursor: 'default',
+            }}>
+              <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 700 }}
+                color={listening === 'profilePrev' ? 'primary.main' : hotkeys.profilePrev ? 'text.primary' : 'text.disabled'}>
+                {listening === 'profilePrev' ? 'press keys…' : hotkeys.profilePrev || 'None'}
+              </Typography>
+            </Box>
+            <Button size="small" variant="outlined" onClick={() => setListening('profilePrev')} disabled={!!listening}>
+              {hotkeys.profilePrev ? 'Rebind' : 'Bind'}
+            </Button>
+            {hotkeys.profilePrev && (
+              <Button size="small" variant="outlined" color="error" onClick={() => clearHotkey('profilePrev')} disabled={!!listening}>
+                Clear
+              </Button>
+            )}
+          </Box>
+        </Box>
+
+        <Box sx={{ mt: 4 }}>
+          <Typography variant="subtitle2" sx={{ mb: 1 }}>Next Profile</Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
+            <Box sx={{
+              px: 2.5, py: 1, borderRadius: 1, border: '1px solid',
+              borderColor: listening === 'profileNext' ? 'primary.main' : 'rgba(255,255,255,0.15)',
+              bgcolor: listening === 'profileNext' ? 'rgba(0,229,255,0.08)' : 'rgba(255,255,255,0.03)',
+              minWidth: 160, textAlign: 'center', cursor: 'default',
+            }}>
+              <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 700 }}
+                color={listening === 'profileNext' ? 'primary.main' : hotkeys.profileNext ? 'text.primary' : 'text.disabled'}>
+                {listening === 'profileNext' ? 'press keys…' : hotkeys.profileNext || 'None'}
+              </Typography>
+            </Box>
+            <Button size="small" variant="outlined" onClick={() => setListening('profileNext')} disabled={!!listening}>
+              {hotkeys.profileNext ? 'Rebind' : 'Bind'}
+            </Button>
+            {hotkeys.profileNext && (
+              <Button size="small" variant="outlined" color="error" onClick={() => clearHotkey('profileNext')} disabled={!!listening}>
+                Clear
+              </Button>
+            )}
+          </Box>
+        </Box>
+
         {listening && (
           <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 2 }}>
             Esc to cancel
@@ -298,7 +394,7 @@ export default function Settings() {
       </Paper>
 
       {/* Application */}
-      <Paper sx={{ p: 3 }}>
+      <Paper sx={{ p: 3, mb: 3 }}>
         <Typography variant="h6" sx={{ mb: 2 }}>Application</Typography>
         <ToggleRow
           label="Start with Windows"
@@ -306,6 +402,71 @@ export default function Settings() {
           checked={autoStart}
           onChange={handleAutoStart}
         />
+        <ToggleRow
+          label="Notifications"
+          hint="Show profile switch and engine state notifications"
+          checked={settings.Notifications_Enabled !== false}
+          onChange={(checked) => updateSetting('Notifications_Enabled', checked)}
+        />
+      </Paper>
+
+      {/* Updates */}
+      <Paper sx={{ p: 3 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, mb: 1 }}>
+          <Typography variant="h6">Updates</Typography>
+          <Button
+            size="small"
+            variant="outlined"
+            startIcon={checkingUpd ? <CircularProgress size={14} color="inherit" /> : <Refresh />}
+            onClick={checkForUpdates}
+            disabled={checkingUpd}
+          >
+            Check Now
+          </Button>
+        </Box>
+
+        <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 2 }}>
+          Checks latest GitHub release for this repository.
+        </Typography>
+
+        {updateInfo && (
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="body2" sx={{ mb: 0.5 }}>
+              Current: <strong>v{updateInfo.currentVersion || 'unknown'}</strong>
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Latest: <strong>v{updateInfo.latestVersion || updateInfo.currentVersion || 'unknown'}</strong>
+            </Typography>
+          </Box>
+        )}
+
+        {updateError && <Alert severity="warning" sx={{ mb: 2 }}>{updateError}</Alert>}
+
+        {updateInfo?.updateAvailable ? (
+          <Alert severity="info" sx={{ mb: 2 }}>
+            A newer version is available on GitHub releases.
+          </Alert>
+        ) : updateInfo ? (
+          <Alert severity="success" sx={{ mb: 2 }}>
+            You are on the latest version.
+          </Alert>
+        ) : null}
+
+        <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
+          <Button
+            variant="contained"
+            onClick={openLatestRelease}
+            disabled={!updateInfo?.downloadUrl}
+          >
+            Download Latest
+          </Button>
+          <Button
+            variant="text"
+            onClick={() => window.api.openExternalUrl(`https://github.com/${updateInfo?.repo || 'DevTheDiv/the.mouse.app'}/releases`)}
+          >
+            View Releases
+          </Button>
+        </Box>
       </Paper>
 
       <Snackbar open={!!snack} autoHideDuration={5000} onClose={() => setSnack(null)} anchorOrigin={{ vertical: 'top', horizontal: 'center' }}>
